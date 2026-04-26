@@ -3,6 +3,13 @@ import { v4 as uuidv4 } from 'uuid'
 import Rack from '../components/Rack'
 import StatusBar from '../components/StatusBar'
 import PreviewPane from '../components/PreviewPane'
+import {
+  deriveDraftTitle,
+  normalizeFormData,
+  normalizeStores,
+  type NormalizedStoreRow,
+  type StoreRowData
+} from '@core/documents/contract-fullright'
 import { coerceDocumentKind } from '@shared/schema/document-kind'
 
 interface Props {
@@ -46,54 +53,11 @@ const EDITABLE_FIELD_KEYS = [
   'contact.b.phone'
 ] as const
 
-interface StoreRow {
-  id: string
-  name: string
-  address: string
-  usingTerm: string
-  months: string
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-}
-
-function normalizeFormData(data: unknown): Record<string, string> {
-  if (!isRecord(data)) return {}
-  return Object.entries(data).reduce<Record<string, string>>((acc, [key, value]) => {
-    if (typeof value === 'string') acc[key] = value
-    if (typeof value === 'number' || typeof value === 'boolean') acc[key] = String(value)
-    return acc
-  }, {})
-}
-
-function normalizeStores(data: unknown): StoreRow[] {
-  if (!isRecord(data) || !Array.isArray(data.stores)) return []
-  return data.stores
-    .filter(isRecord)
-    .map((row) => ({
-      id: typeof row.id === 'string' ? row.id : uuidv4(),
-      name: typeof row.name === 'string' ? row.name : '',
-      address: typeof row.address === 'string' ? row.address : '',
-      usingTerm: typeof row.usingTerm === 'string' ? row.usingTerm : '',
-      months: typeof row.months === 'string' || typeof row.months === 'number' ? String(row.months) : ''
-    }))
-}
-
-function deriveDraftTitle(data: Record<string, string>): string {
-  const contractNo = data['meta.contractNo']?.trim()
-  const partyName = data['partyB.name']?.trim()
-  if (contractNo && partyName) return `${contractNo} · ${partyName}`
-  if (contractNo) return contractNo
-  if (partyName) return partyName
-  return 'Untitled'
-}
-
 export default function FormView({ draftId, templateId, onBack, onOpenSettings }: Props) {
   const draftKind = coerceDocumentKind(templateId)
   const [activeTab, setActiveTab] = useState<'main' | 'app1' | 'app2'>('main')
   const [formData, setFormData] = useState<Record<string, string>>({})
-  const [stores, setStores] = useState<StoreRow[]>([])
+  const [stores, setStores] = useState<NormalizedStoreRow[]>([])
   const [isExporting, setIsExporting] = useState(false)
   const [exportedPath, setExportedPath] = useState<string | null>(null)
   const draftMetaRef = useRef<{ createdAt: string | null; exportedPath: string | null }>({
@@ -126,7 +90,7 @@ export default function FormView({ draftId, templateId, onBack, onOpenSettings }
         }
         setExportedPath(draft?.exportedPath ?? null)
         setFormData(normalizeFormData(draft?.data))
-        setStores(normalizeStores(draft?.data))
+        setStores(normalizeStores(draft?.data, uuidv4))
         hydratedRef.current = true
       })
       .catch(() => {
@@ -176,7 +140,7 @@ export default function FormView({ draftId, templateId, onBack, onOpenSettings }
     setStores((prev) => [...prev, { id: uuidv4(), name: '', address: '', usingTerm: '', months: '' }])
   }
 
-  function updateStoreRow(id: string, key: keyof Omit<StoreRow, 'id'>, value: string) {
+  function updateStoreRow(id: string, key: keyof Omit<StoreRowData, 'id'>, value: string) {
     dirtyRef.current = true
     setStores((prev) => prev.map((row) => row.id === id ? { ...row, [key]: value } : row))
   }
