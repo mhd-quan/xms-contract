@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import Rack from '../components/Rack'
 import StatusBar from '../components/StatusBar'
 import PreviewPane from '../components/PreviewPane'
+import { coerceDocumentKind } from '@shared/schema/document-kind'
 
 interface Props {
   draftId: string
@@ -89,6 +90,7 @@ function deriveDraftTitle(data: Record<string, string>): string {
 }
 
 export default function FormView({ draftId, templateId, onBack, onOpenSettings }: Props) {
+  const draftKind = coerceDocumentKind(templateId)
   const [activeTab, setActiveTab] = useState<'main' | 'app1' | 'app2'>('main')
   const [formData, setFormData] = useState<Record<string, string>>({})
   const [stores, setStores] = useState<StoreRow[]>([])
@@ -146,6 +148,7 @@ export default function FormView({ draftId, templateId, onBack, onOpenSettings }
       const now = new Date().toISOString()
       window.api.saveDraft({
         id: draftId,
+        kind: draftKind,
         templateId,
         title: draftTitle,
         createdAt: draftMetaRef.current.createdAt ?? now,
@@ -161,7 +164,7 @@ export default function FormView({ draftId, templateId, onBack, onOpenSettings }
     }, 1200)
 
     return () => window.clearTimeout(handle)
-  }, [draftId, draftTitle, formData, stores, templateId])
+  }, [draftId, draftKind, draftTitle, formData, stores, templateId])
 
   function updateField(key: string, value: string) {
     dirtyRef.current = true
@@ -191,6 +194,7 @@ export default function FormView({ draftId, templateId, onBack, onOpenSettings }
     const now = new Date().toISOString()
     await window.api.saveDraft({
       id: draftId,
+      kind: draftKind,
       templateId,
       title: draftTitle,
       createdAt: draftMetaRef.current.createdAt ?? now,
@@ -208,6 +212,7 @@ export default function FormView({ draftId, templateId, onBack, onOpenSettings }
       await persistDraft()
       const rendered = await window.api.renderDocx({
         draftId,
+        kind: draftKind,
         templateId,
         data: { ...formData, stores }
       })

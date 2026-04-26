@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { v4 as uuidv4 } from 'uuid'
+import { coerceDocumentKind, type DocumentKind } from '@shared/schema/document-kind'
 
 interface Props {
   onOpenTemplate: (draftId: string, templateId: string) => void
@@ -8,6 +9,7 @@ interface Props {
 
 interface DraftSummary {
   id: string
+  kind?: DocumentKind
   templateId: string
   title: string
   createdAt: string
@@ -16,6 +18,7 @@ interface DraftSummary {
 
 interface TemplateEntry {
   id: string
+  kind?: DocumentKind
   name: string
   subtitle: string
   version: string
@@ -32,13 +35,13 @@ export default function LibraryView({ onOpenTemplate, onOpenSettings }: Props) {
     try {
       const tpls = await window.api.listTemplates()
       setTemplates(tpls?.length ? tpls : [
-        { id: 'contract-fullright', name: 'Contract Fullright', subtitle: 'Background Music Service Agreement', version: '1.0.0' }
+        { id: 'contract-fullright', kind: 'contract-fullright', name: 'Contract Fullright', subtitle: 'Background Music Service Agreement', version: '1.0.0' }
       ])
       const draftList = await window.api.listDrafts()
       setDrafts(draftList || [])
     } catch {
       setTemplates([
-        { id: 'contract-fullright', name: 'Contract Fullright', subtitle: 'Background Music Service Agreement', version: '1.0.0' }
+        { id: 'contract-fullright', kind: 'contract-fullright', name: 'Contract Fullright', subtitle: 'Background Music Service Agreement', version: '1.0.0' }
       ])
     }
   }
@@ -46,10 +49,11 @@ export default function LibraryView({ onOpenTemplate, onOpenSettings }: Props) {
   async function handleNewDraft(templateId: string) {
     const draftId = uuidv4()
     const now = new Date().toISOString()
+    const kind = coerceDocumentKind(templateId)
     try {
-      await window.api.saveDraft({ id: draftId, templateId, title: 'Untitled', createdAt: now, updatedAt: now, exportedPath: null, data: {} })
+      await window.api.saveDraft({ id: draftId, kind, templateId: kind, title: 'Untitled', createdAt: now, updatedAt: now, exportedPath: null, data: {} })
     } catch { /* proceed */ }
-    onOpenTemplate(draftId, templateId)
+    onOpenTemplate(draftId, kind)
   }
 
   async function handleDeleteDraft(e: React.MouseEvent, id: string) {

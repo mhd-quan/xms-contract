@@ -5,6 +5,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, readd
 import { v4 as uuidv4 } from 'uuid'
 import JSZip from 'jszip'
 import { buildClickReplacements, buildSpecialTextReplacements } from '@shared/contract-render'
+import { coerceDocumentKind } from '@shared/schema/document-kind'
 import type { AppSettings } from '@shared/types'
 
 // ─── Paths ──────────────────────────────────────────────────────────────
@@ -60,6 +61,13 @@ function isPresent<T>(value: T | null): value is T {
   return value !== null
 }
 
+function withDraftKind<T extends Record<string, unknown>>(draft: T): T & { kind: string } {
+  return {
+    ...draft,
+    kind: coerceDocumentKind(draft.kind, coerceDocumentKind(draft.templateId))
+  }
+}
+
 // ─── Draft Helpers ──────────────────────────────────────────────────────
 function listDrafts(): object[] {
   ensureDirs()
@@ -69,6 +77,7 @@ function listDrafts(): object[] {
       const data = JSON.parse(readFileSync(join(DRAFTS_DIR, f), 'utf-8'))
       return {
         id: data.id,
+        kind: coerceDocumentKind(data.kind, coerceDocumentKind(data.templateId)),
         templateId: data.templateId,
         title: data.title || 'Untitled',
         createdAt: data.createdAt,
@@ -84,14 +93,16 @@ function listDrafts(): object[] {
 function loadDraft(id: string): object | null {
   const fp = join(DRAFTS_DIR, `${id}.json`)
   if (!existsSync(fp)) return null
-  return JSON.parse(readFileSync(fp, 'utf-8'))
+  const draft = JSON.parse(readFileSync(fp, 'utf-8'))
+  return typeof draft === 'object' && draft !== null ? withDraftKind(draft) : null
 }
 
 function saveDraft(draft: { id?: string; [key: string]: unknown }): { id: string; savedAt: string } {
   ensureDirs()
   const id = draft.id || uuidv4()
   const now = new Date().toISOString()
-  const payload = { ...draft, id, updatedAt: now, createdAt: draft.createdAt || now }
+  const kind = coerceDocumentKind(draft.kind, coerceDocumentKind(draft.templateId))
+  const payload = { ...draft, id, kind, updatedAt: now, createdAt: draft.createdAt || now }
   writeFileSync(join(DRAFTS_DIR, `${id}.json`), JSON.stringify(payload, null, 2), 'utf-8')
   return { id, savedAt: now }
 }
