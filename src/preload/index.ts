@@ -17,6 +17,7 @@ const api = {
   saveSettings: (settings: unknown) => ipcRenderer.invoke('settings:save', settings),
 
   // Render
+  renderDocx: (payload: unknown) => ipcRenderer.invoke('render:docx', payload),
   saveAs: (tempPath: string, suggestedName: string) =>
     ipcRenderer.invoke('render:saveAs', tempPath, suggestedName),
 

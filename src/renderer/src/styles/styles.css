@@ -307,6 +307,23 @@ input[type=number] { -moz-appearance: textfield; }
 .preview-doc-icon { opacity: 0.5; }
 .preview-placeholder-text { font-size: 13px; color: var(--text-dim); }
 .preview-placeholder-hint { font-size: 10px; color: var(--text-dim); opacity: 0.5; letter-spacing: 0.12em; text-transform: uppercase; }
+.live-doc { width: min(860px, calc(100% - 40px)); min-height: calc(100% - 40px); margin: 20px;
+  padding: 28px 32px; background: #f8f8f6; color: #111; font-family: 'Times New Roman', serif;
+  font-size: 13px; line-height: 1.45; border: 1px solid #d8d8d0; }
+.live-doc-header { display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding-bottom: 12px; margin-bottom: 16px; border-bottom: 2px solid #111; font-family: var(--font); text-transform: uppercase; letter-spacing: 0.08em; }
+.live-doc-header span { font-size: 12px; font-weight: 800; }
+.live-doc-header strong { font-size: 12px; font-weight: 800; }
+.live-doc-section { margin-bottom: 18px; }
+.live-doc-section h3 { font-family: var(--font); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+.live-doc-grid { display: grid; grid-template-columns: 132px 1fr; border-top: 1px solid #c9c9c1; border-left: 1px solid #c9c9c1; }
+.live-doc-grid dt, .live-doc-grid dd { min-height: 28px; padding: 6px 8px; border-right: 1px solid #c9c9c1; border-bottom: 1px solid #c9c9c1; }
+.live-doc-grid dt { font-weight: 700; background: #eeeeea; }
+.live-doc-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.live-doc-table th, .live-doc-table td { border: 1px solid #999; padding: 6px 8px; vertical-align: top; }
+.live-doc-table th { background: #e7e7e0; font-family: var(--font); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+.live-doc-table tfoot td { font-weight: 700; background: #eeeeea; }
+.live-doc-words { margin-top: 14px; font-weight: 700; }
 
 /* ─── STATUS BAR (Transport analog) ────────────────────────────────────── */
 .statusbar { height: 36px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between;

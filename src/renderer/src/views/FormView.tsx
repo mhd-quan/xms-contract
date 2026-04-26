@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import Rack from '../components/Rack'
 import StatusBar from '../components/StatusBar'
+import PreviewPane from '../components/PreviewPane'
 
 interface Props {
   draftId: string
@@ -91,6 +92,8 @@ export default function FormView({ draftId, templateId, onBack, onOpenSettings }
   const [activeTab, setActiveTab] = useState<'main' | 'app1' | 'app2'>('main')
   const [formData, setFormData] = useState<Record<string, string>>({})
   const [stores, setStores] = useState<StoreRow[]>([])
+  const [isExporting, setIsExporting] = useState(false)
+  const [exportedPath, setExportedPath] = useState<string | null>(null)
   const draftMetaRef = useRef<{ createdAt: string | null; exportedPath: string | null }>({
     createdAt: null,
     exportedPath: null
@@ -119,6 +122,7 @@ export default function FormView({ draftId, templateId, onBack, onOpenSettings }
           createdAt: draft?.createdAt ?? null,
           exportedPath: draft?.exportedPath ?? null
         }
+        setExportedPath(draft?.exportedPath ?? null)
         setFormData(normalizeFormData(draft?.data))
         setStores(normalizeStores(draft?.data))
         hydratedRef.current = true
@@ -177,6 +181,49 @@ export default function FormView({ draftId, templateId, onBack, onOpenSettings }
   function deleteStoreRow(id: string) {
     dirtyRef.current = true
     setStores((prev) => prev.filter((row) => row.id !== id))
+  }
+
+  function suggestedExportName() {
+    return `${draftTitle === 'Untitled' ? 'xms-contract' : draftTitle}`.replace(/[/:*?"<>|]/g, '-').slice(0, 80) + '.docx'
+  }
+
+  async function persistDraft(nextExportedPath = draftMetaRef.current.exportedPath) {
+    const now = new Date().toISOString()
+    await window.api.saveDraft({
+      id: draftId,
+      templateId,
+      title: draftTitle,
+      createdAt: draftMetaRef.current.createdAt ?? now,
+      updatedAt: now,
+      exportedPath: nextExportedPath,
+      data: { ...formData, stores }
+    })
+    draftMetaRef.current.createdAt ??= now
+    dirtyRef.current = false
+  }
+
+  async function handleExport() {
+    setIsExporting(true)
+    try {
+      await persistDraft()
+      const rendered = await window.api.renderDocx({
+        draftId,
+        templateId,
+        data: { ...formData, stores }
+      })
+      const saved = await window.api.saveAs(rendered.tempPath, suggestedExportName())
+      if ('finalPath' in saved) {
+        draftMetaRef.current.exportedPath = saved.finalPath
+        setExportedPath(saved.finalPath)
+        await persistDraft(saved.finalPath)
+      }
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  function handleOpenExport() {
+    if (exportedPath) window.api.openFile(exportedPath)
   }
 
   return (
@@ -309,27 +356,20 @@ export default function FormView({ draftId, templateId, onBack, onOpenSettings }
 
         <div className="split-handle"><div className="split-handle-bar" /></div>
 
-        <div className="preview-pane">
-          <div className="preview-tabs">
-            {(['main','app1','app2'] as const).map(t => (
-              <button key={t} className={`preview-tab${activeTab === t ? ' active' : ''}`} onClick={() => setActiveTab(t)}>
-                {t === 'main' ? 'Main Contract' : t === 'app1' ? 'Appendix 1' : 'Appendix 2'}
-              </button>
-            ))}
-          </div>
-          <div className="preview-frame">
-            <div className="preview-placeholder">
-              <div className="preview-doc-icon">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>
-              </div>
-              <span className="preview-placeholder-text">Live preview sẽ hiển thị khi bạn điền form</span>
-              <span className="preview-placeholder-hint">Skeleton HTML · mammoth.js</span>
-            </div>
-          </div>
-        </div>
+        <PreviewPane activeTab={activeTab} onTabChange={setActiveTab} formData={formData} stores={stores} />
       </div>
 
-      <StatusBar completeness={completeness} filledCount={filledCount} totalFields={totalFields} draftTitle={draftTitle} />
+      <StatusBar
+        completeness={completeness}
+        filledCount={filledCount}
+        totalFields={totalFields}
+        draftTitle={draftTitle}
+        exportAvailable
+        exportedPath={exportedPath}
+        isExporting={isExporting}
+        onExport={handleExport}
+        onOpenExport={handleOpenExport}
+      />
     </div>
   )
 }

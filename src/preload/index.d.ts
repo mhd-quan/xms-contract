@@ -8,6 +8,7 @@ interface XmsApi {
   deleteDraft: (id: string) => Promise<void>
   getSettings: () => Promise<Settings>
   saveSettings: (settings: unknown) => Promise<void>
+  renderDocx: (payload: unknown) => Promise<{ tempPath: string }>
   saveAs: (tempPath: string, suggestedName: string) => Promise<{ finalPath: string } | { cancelled: true }>
   openFile: (path: string) => Promise<void>
   showInFinder: (path: string) => Promise<void>

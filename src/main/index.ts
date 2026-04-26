@@ -1,16 +1,21 @@
 import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from 'fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from 'fs'
 import { v4 as uuidv4 } from 'uuid'
+import JSZip from 'jszip'
+import { buildClickReplacements, buildSpecialTextReplacements } from '@shared/contract-render'
+import type { AppSettings } from '@shared/types'
 
 // ─── Paths ──────────────────────────────────────────────────────────────
 const APP_DATA = join(app.getPath('userData'))
 const DRAFTS_DIR = join(APP_DATA, 'drafts')
 const SETTINGS_PATH = join(APP_DATA, 'settings.json')
+const TEMP_DIR = join(APP_DATA, 'temp')
 
 function ensureDirs(): void {
   if (!existsSync(DRAFTS_DIR)) mkdirSync(DRAFTS_DIR, { recursive: true })
+  if (!existsSync(TEMP_DIR)) mkdirSync(TEMP_DIR, { recursive: true })
 }
 
 // ─── Settings Helpers ───────────────────────────────────────────────────
@@ -118,6 +123,74 @@ function listTemplates(): object[] {
   }).filter(isPresent)
 }
 
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+}
+
+function replaceNextTextNode(xml: string, text: string, replacement: string): string {
+  const escapedText = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return xml.replace(
+    new RegExp(`<w:t([^>]*)>${escapedText}</w:t>`),
+    (_match, attrs: string) => `<w:t${attrs}>${escapeXml(replacement)}</w:t>`
+  )
+}
+
+function replaceTextNodeContaining(xml: string, needle: string, replacement: string): string {
+  const pattern = new RegExp(`<w:t([^>]*)>[^<]*${needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^<]*</w:t>`)
+  return xml.replace(pattern, (_match, attrs: string) => `<w:t${attrs}>${escapeXml(replacement)}</w:t>`)
+}
+
+function normalizeDocxContentTypes(xml: string): string {
+  return xml.replace(
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml'
+  )
+}
+
+async function renderDocx(payload: { draftId?: string; templateId: string; data: Record<string, unknown> }): Promise<{ tempPath: string }> {
+  const templatePath = join(getTemplatesDir(), payload.templateId, 'contract-fullright.template.docx')
+  if (!existsSync(templatePath)) {
+    throw new Error(`Missing template file: ${templatePath}`)
+  }
+
+  const settings = loadSettings()
+  const zip = await JSZip.loadAsync(readFileSync(templatePath))
+  const documentPart = zip.file('word/document.xml')
+  if (!documentPart) throw new Error('Template is missing word/document.xml')
+
+  let documentXml = await documentPart.async('string')
+  const specials = buildSpecialTextReplacements(payload.data)
+  documentXml = replaceNextTextNode(documentXml, '………………', specials.contractNo)
+  documentXml = documentXml
+    .replace(/Điền số HD\./g, () => escapeXml(specials.contractNo))
+
+  if (specials.signedDateLine) documentXml = replaceTextNodeContaining(documentXml, 'Hôm nay, ngày', specials.signedDateLine)
+  if (specials.signedDateLineEn) documentXml = replaceTextNodeContaining(documentXml, 'Today, on', specials.signedDateLineEn)
+  if (specials.termLine) documentXml = replaceTextNodeContaining(documentXml, 'kể từ ngày', specials.termLine)
+  if (specials.termLineEn) documentXml = replaceTextNodeContaining(documentXml, 'from ................', specials.termLineEn)
+
+  const replacements = buildClickReplacements(payload.data, settings as AppSettings)
+  for (const replacement of replacements) {
+    documentXml = replaceNextTextNode(documentXml, 'Click điền thông tin.', replacement)
+  }
+
+  zip.file('word/document.xml', documentXml)
+  const contentTypes = zip.file('[Content_Types].xml')
+  if (contentTypes) {
+    zip.file('[Content_Types].xml', normalizeDocxContentTypes(await contentTypes.async('string')))
+  }
+
+  const out = await zip.generateAsync({ type: 'nodebuffer' })
+  const tempPath = join(TEMP_DIR, `${payload.draftId || uuidv4()}.docx`)
+  writeFileSync(tempPath, out)
+  return { tempPath }
+}
+
 // ─── IPC Handlers ───────────────────────────────────────────────────────
 function registerIpcHandlers(): void {
   ipcMain.handle('template:list', () => listTemplates())
@@ -130,6 +203,8 @@ function registerIpcHandlers(): void {
   ipcMain.handle('settings:get', () => loadSettings())
   ipcMain.handle('settings:save', (_, settings) => saveSettings(settings))
 
+  ipcMain.handle('render:docx', (_, payload) => renderDocx(payload))
+
   ipcMain.handle('os:openFile', async (_, path: string) => {
     await shell.openPath(path)
   })
@@ -137,12 +212,15 @@ function registerIpcHandlers(): void {
     shell.showItemInFolder(path)
   })
 
-  ipcMain.handle('render:saveAs', async (_, _tempPath: string, suggestedName: string) => {
+  ipcMain.handle('render:saveAs', async (_, tempPath: string, suggestedName: string) => {
+    const defaultDir = join(app.getPath('documents'), 'XMS Contracts')
+    if (!existsSync(defaultDir)) mkdirSync(defaultDir, { recursive: true })
     const result = await dialog.showSaveDialog({
-      defaultPath: join(app.getPath('documents'), 'XMS Contracts', suggestedName),
+      defaultPath: join(defaultDir, suggestedName),
       filters: [{ name: 'Word Document', extensions: ['docx'] }]
     })
     if (result.canceled || !result.filePath) return { cancelled: true }
+    copyFileSync(tempPath, result.filePath)
     return { finalPath: result.filePath }
   })
 }
