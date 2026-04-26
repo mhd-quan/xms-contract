@@ -5,6 +5,7 @@ import { buildPreviewModel, readContractField } from './build-preview-model'
 import type { ContractFullrightForm } from './types'
 
 export interface SpecialTextReplacements {
+  [key: string]: string | null
   contractNo: string
   signedDateLine: string | null
   signedDateLineEn: string | null
