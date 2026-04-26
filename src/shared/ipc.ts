@@ -11,6 +11,7 @@ export const IPC_CHANNELS = {
   SETTINGS_GET: 'settings:get',
   SETTINGS_SAVE: 'settings:save',
   RENDER_DOCX: 'render:docx',
+  RENDER_PREVIEW: 'render:preview',
   RENDER_SAVE_AS: 'render:saveAs',
   OS_OPEN_FILE: 'os:openFile',
   OS_SHOW_IN_FINDER: 'os:showInFinder'
