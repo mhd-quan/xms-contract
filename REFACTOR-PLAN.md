@@ -15,7 +15,8 @@
 2. Mỗi lớp có ranh giới rõ; chỉ giao tiếp qua **interface đã định nghĩa**.
 3. Cô lập side-effects (file I/O, DOCX rendering, dialog) vào Infrastructure để dễ mock và dễ thay thế.
 4. Đặt nền móng cho việc thêm exporter mới (Xlsx, Pdf) mà **không sửa Core, không sửa UI**.
-5. Codify cấu trúc + quy tắc vào `ARCHITECTURE.md` để mọi feature mới đều theo chuẩn.
+5. Hỗ trợ **nhiều loại tài liệu** (`contract-fullright`, `annex-newstore`, …) song song; thêm loại mới chỉ là thêm module, không sửa code chung.
+6. Codify cấu trúc + quy tắc vào `ARCHITECTURE.md` để mọi feature mới đều theo chuẩn.
 
 ### 0.2 Nguyên tắc bất biến
 - **Core không import Electron, không import React, không import `node:fs`/`node:path`/`jszip`/`mammoth`.** Chỉ TypeScript thuần + `zod` + `date-fns`.
@@ -23,6 +24,7 @@
 - **Main không import React.** Main không biết gì về UI. Mọi thứ Main trả ra phải là plain data đã validate qua zod.
 - **IPC payload phải có schema zod ở cả hai phía.** Channel name lấy từ một file constants duy nhất (`@shared/ipc/channels.ts`); không bao giờ hardcode chuỗi.
 - **Pure functions trong Core không nhận Date.now() hay đọc env.** Mọi non-determinism phải truyền vào qua tham số (clock, ids).
+- **Không hard-code 1 loại tài liệu.** Mọi nơi đụng tới “loại tài liệu” phải đi qua `DocumentKind` (union type) + `DocumentRegistry` (lookup logic theo kind). Cấm `if (kind === 'contract-fullright')` rải rác trong code.
 
 ### 0.3 Tiêu chí “Done” cho refactor
 - `npm run typecheck` xanh ở cả `node` và `web` config.
@@ -43,15 +45,25 @@ src/
 │   │   ├── number-to-vietnamese.ts
 │   │   ├── format-money.ts
 │   │   └── index.ts               # public surface của pricing module
-│   ├── contract/
-│   │   ├── build-preview-model.ts # input: ContractFormData → output: ContractPreviewModel
-│   │   ├── build-replacements.ts  # output: { clickReplacements, specialTextReplacements }
-│   │   ├── derive-draft-title.ts
-│   │   ├── normalize-form-data.ts
-│   │   └── index.ts
 │   ├── date/
 │   │   ├── format-date.ts         # nhận Date | string, không gọi new Date() ngầm
 │   │   └── index.ts
+│   ├── documents/                 # 1 sub-folder cho mỗi DocumentKind. Cấu trúc giống nhau.
+│   │   ├── document-logic.ts      # interface DocumentLogic<TForm,TPreview> dùng chung
+│   │   ├── registry.ts            # const DOCUMENT_REGISTRY: Record<DocumentKind, DocumentLogic>
+│   │   ├── shared-primitives/     # Party, Store, money primitives dùng chung giữa các kind
+│   │   ├── contract-fullright/
+│   │   │   ├── build-preview-model.ts
+│   │   │   ├── build-replacements.ts
+│   │   │   ├── derive-draft-title.ts
+│   │   │   ├── normalize-form-data.ts
+│   │   │   └── index.ts           # export DocumentLogic implementation
+│   │   └── annex-newstore/
+│   │       ├── build-preview-model.ts
+│   │       ├── build-replacements.ts
+│   │       ├── derive-draft-title.ts
+│   │       ├── normalize-form-data.ts
+│   │       └── index.ts
 │   └── index.ts                   # re-export public API của Core
 │
 ├── infrastructure/                # LỚP 2 — Side-effects. Chỉ chạy ở Main process.
@@ -60,8 +72,8 @@ src/
 │   │   ├── draft-repository.ts    # DraftRepository interface + JsonDraftRepository impl
 │   │   └── paths.ts               # APP_DATA, DRAFTS_DIR, TEMP_DIR (single source)
 │   ├── templates/
-│   │   ├── template-loader.ts     # TemplateLoader interface + FsTemplateLoader impl
-│   │   └── manifest.ts
+│   │   ├── template-loader.ts     # TemplateLoader interface + CachingFsTemplateLoader (Map<kind,Uint8Array>)
+│   │   └── manifest.ts            # đọc templates/<kind>/manifest.json
 │   ├── exporters/
 │   │   ├── exporter.ts            # interface Exporter<TInput, TOutput>
 │   │   ├── docx/
@@ -125,9 +137,11 @@ src/
     │   ├── channels.ts            # const IPC_CHANNELS = { ... } as const
     │   └── contracts.ts           # zod schema cho mọi IPC payload + response
     ├── schema/
+    │   ├── document-kind.ts       # z.enum(['contract-fullright','annex-newstore'])
     │   ├── contract-fullright.ts
+    │   ├── annex-newstore.ts
     │   ├── settings.ts
-    │   └── draft.ts
+    │   └── draft.ts               # Draft = discriminated union theo `kind`
     └── types.ts                   # types derived từ zod via z.infer
 ```
 
@@ -143,21 +157,60 @@ src/
 ## 2. Phase 1 — Core / Domain (Pure Logic)
 
 ### 2.1 Scope
-Trích xuất toàn bộ logic tính toán & format từ `src/shared/contract-render.ts` + một phần `FormView.tsx` thành `src/core/`. Không thay đổi hành vi.
+Trích xuất toàn bộ logic tính toán & format từ `src/shared/contract-render.ts` + một phần `FormView.tsx` thành `src/core/`. **Tổ chức theo `DocumentKind`** ngay từ đầu để annex-newstore có chỗ ở. Không thay đổi hành vi của contract-fullright.
 
 ### 2.2 Việc cần làm
-1. Tạo `src/core/pricing/`:
-   - `format-money.ts` ← `formatMoney` (contract-render.ts:82-85).
-   - `number-to-vietnamese.ts` ← `numberToVietnamese` (contract-render.ts:87-130).
-   - `calculate-fees.ts` ← phần “fees calculation, subtotal, VAT, grand total” từ `buildPreviewModel` (contract-render.ts:132-169). Tách riêng để test độc lập.
-2. Tạo `src/core/date/format-date.ts` ← `formatDate`, `formatDateLong` (contract-render.ts:68-80). Yêu cầu: nếu input là string ISO, dùng `parseISO`; nếu là `Date`, dùng trực tiếp. **Không** gọi `new Date()` ngầm trong hàm.
-3. Tạo `src/core/contract/`:
+1. **Primitives chung**:
+   - `src/core/pricing/format-money.ts` ← `formatMoney` (contract-render.ts:82-85).
+   - `src/core/pricing/number-to-vietnamese.ts` ← `numberToVietnamese` (contract-render.ts:87-130).
+   - `src/core/pricing/calculate-fees.ts` ← phần “fees calculation, subtotal, VAT, grand total” từ `buildPreviewModel` (contract-render.ts:132-169). Tách riêng để test độc lập.
+   - `src/core/date/format-date.ts` ← `formatDate`, `formatDateLong` (contract-render.ts:68-80). Yêu cầu: nếu input là string ISO, dùng `parseISO`; nếu là `Date`, dùng trực tiếp. **Không** gọi `new Date()` ngầm.
+
+2. **Interface chung cho mọi document kind** — `src/core/documents/document-logic.ts`:
+   ```ts
+   export interface DocumentLogic<TForm, TPreview> {
+     readonly kind: DocumentKind;
+     normalizeFormData(input: unknown): TForm;
+     deriveDraftTitle(form: TForm): string;
+     buildPreviewModel(form: TForm): TPreview;
+     buildReplacements(form: TForm, preview: TPreview): {
+       clickReplacements: Record<string, string>;
+       specialTextReplacements: Record<string, string>;
+     };
+   }
+   ```
+
+3. **`src/core/documents/contract-fullright/`** — port từ code hiện tại:
    - `normalize-form-data.ts` ← `normalizeFormData`, `normalizeStores` (FormView.tsx:60-80).
    - `derive-draft-title.ts` ← `deriveDraftTitle` (FormView.tsx:82-89).
-   - `build-preview-model.ts` ← `buildPreviewModel` còn lại (gọi `calculate-fees`).
+   - `build-preview-model.ts` ← phần còn lại của `buildPreviewModel` (gọi `calculate-fees`).
    - `build-replacements.ts` ← `buildClickReplacements` + `buildSpecialTextReplacements` (contract-render.ts:171-269).
-4. Tạo `src/core/index.ts` re-export public surface.
-5. Xoá `src/shared/contract-render.ts` sau khi đã chuyển hết import sang `@core/*`.
+   - `index.ts` export `contractFullrightLogic: DocumentLogic<...>`.
+
+4. **`src/core/documents/annex-newstore/`** — placeholder có-chạy-được:
+   - Phase này tạo file scaffolding với type-safe stub: `normalizeFormData` trả về object rỗng đã typed, `buildPreviewModel`/`buildReplacements` trả `{}` placeholder. Lý do: cấu trúc registry hoạt động ngay, code thật điền sau khi có spec từ `annex-newstore.md`.
+   - **Blocker**: Cần `annex-newstore.md` (spec field) để hoàn thiện logic. Xem §12.
+   - `index.ts` export `annexNewstoreLogic: DocumentLogic<...>`.
+
+5. **`src/core/documents/registry.ts`**:
+   ```ts
+   export const DOCUMENT_REGISTRY = {
+     'contract-fullright': contractFullrightLogic,
+     'annex-newstore':     annexNewstoreLogic,
+   } as const satisfies Record<DocumentKind, DocumentLogic<any, any>>;
+
+   export function getDocumentLogic(kind: DocumentKind) { return DOCUMENT_REGISTRY[kind]; }
+   ```
+
+6. **Schema canonicalization** (`src/shared/schema/`):
+   - `document-kind.ts` định nghĩa `z.enum(['contract-fullright','annex-newstore'])`.
+   - Sửa `contract-fullright.ts` cho khớp data path thật của form.
+   - Tạo `annex-newstore.ts` (rỗng/stub đến khi có spec).
+   - `draft.ts` định nghĩa Draft là **discriminated union** theo `kind`.
+
+7. Tạo `src/core/index.ts` re-export public surface (pricing, date, documents).
+
+8. Xoá `src/shared/contract-render.ts` sau khi đã chuyển hết import sang `@core/*`.
 
 ### 2.3 Yêu cầu kỹ thuật
 - Mỗi hàm Core nhận **input đã validate qua zod** (do caller validate, không validate trong Core). Lý do: tránh bundle zod runtime cost lặp lại trong Core hot path.
@@ -165,10 +218,12 @@ Trích xuất toàn bộ logic tính toán & format từ `src/shared/contract-re
 - Không return undefined ẩn — luôn trả về object đã normalize đầy đủ field.
 - Mỗi file Core ≤ 150 dòng. Nếu vượt, tách tiếp.
 - Path alias `@core/*` được thêm vào `tsconfig.web.json`, `tsconfig.node.json`, `electron.vite.config.ts`.
+- `DocumentKind` enum được khai báo **một chỗ duy nhất** ở `shared/schema/document-kind.ts`; mọi switch/branch khác dẫn xuất từ đây (compile-error nếu thêm kind mà quên handle).
 
 ### 2.4 Acceptance
-- `import { buildPreviewModel } from '@core/contract'` chạy được ở renderer.
-- `import { buildClickReplacements } from '@core/contract'` chạy được ở main.
+- `import { getDocumentLogic } from '@core/documents'` chạy được ở renderer (cho preview) và main (cho render DOCX).
+- `getDocumentLogic('contract-fullright').buildReplacements(form, preview)` ra output **byte-by-byte giống hành vi hiện tại** (golden test, §6).
+- `getDocumentLogic('annex-newstore')` không throw, trả stub object hợp lệ.
 - `npm test -- core` xanh (xem §6).
 
 ---
@@ -198,24 +253,29 @@ Tách toàn bộ I/O và Electron API ra khỏi `main/index.ts` thành các serv
    }
    ```
    Impl `JsonDraftRepository` (main/index.ts:63-102). Validate Draft qua `DraftSchema` khi load và save.
-4. **TemplateLoader**:
+4. **TemplateLoader** (có cache RAM):
    ```ts
    export interface TemplateLoader {
-     listManifest(): Promise<TemplateManifestEntry[]>;
-     loadBinary(templateId: string): Promise<Uint8Array>;
+     listManifest(): Promise<TemplateManifestEntry[]>;     // có field { kind, id, title, path }
+     loadBinary(kind: DocumentKind): Promise<Uint8Array>;  // cached
+     invalidate(kind?: DocumentKind): void;
    }
    ```
-   Impl `FsTemplateLoader` (main/index.ts:104-124).
+   Impl `CachingFsTemplateLoader` (port từ main/index.ts:104-124). Cache theo `Map<DocumentKind, Uint8Array>`. Lazy-load: lần đầu đọc từ disk, lần sau trả từ cache.
+   - **Cache key**: `kind` (không phải file path, để renderer không bao giờ thấy path).
+   - **Invalidation**: API `invalidate()` công khai cho dev/test; production chỉ invalidate khi app khởi động lại.
+   - **Layout disk**: `templates/<kind>/<kind>.template.docx` + `templates/<kind>/manifest.json`. Đọc folder để build manifest list.
 5. **Exporter interface** (mở cửa cho Xlsx/Pdf):
    ```ts
    export interface Exporter<TInput, TOutput = Uint8Array> {
-     readonly id: string;          // 'docx' | 'xlsx' | 'pdf'
+     readonly id: string;            // 'docx' | 'xlsx' | 'pdf'
      readonly fileExtension: string; // '.docx'
      export(input: TInput): Promise<TOutput>;
    }
    ```
    - `DocxExporter implements Exporter<DocxRenderInput, Uint8Array>`. Gói `JSZip` + xml-utils + content-types vào đây (main/index.ts:126-192).
    - `DocxRenderInput = { templateBinary: Uint8Array; clickReplacements: Record<string,string>; specialTextReplacements: Record<string,string> }`.
+   - **Document-kind-agnostic**: Exporter không biết về `DocumentKind`. Caller (render handler) chịu trách nhiệm: lấy template binary theo kind từ `TemplateLoader`, gọi `getDocumentLogic(kind).buildReplacements(...)`, rồi đưa cho Exporter. Logic này tập trung ở 1 hàm `renderDocument(kind, form)` trong `main/ipc/handlers/render-handlers.ts`.
    - `xlsx/`, `pdf/` chỉ có README giải thích cách thêm exporter mới (chưa code).
 6. **ShellService** + **DialogService**: bọc `shell.openPath`, `shell.showItemInFolder`, `dialog.showSaveDialog` (main/index.ts:208-220).
 7. **Composition root** `main/container.ts`:
@@ -265,15 +325,20 @@ Tách toàn bộ I/O và Electron API ra khỏi `main/index.ts` thành các serv
      os:       { openFile: 'os:openFile', showInFinder: 'os:showInFinder' },
    } as const;
    ```
-2. `src/shared/ipc/contracts.ts`: với mỗi channel, định nghĩa **1 cặp** `RequestSchema` + `ResponseSchema` bằng zod. Ví dụ:
+2. `src/shared/ipc/contracts.ts`: với mỗi channel, định nghĩa **1 cặp** `RequestSchema` + `ResponseSchema` bằng zod. Đặc biệt cho draft + render: payload **discriminate theo `kind`** để type-safe end-to-end.
    ```ts
-   export const RenderDocxRequest = z.object({
-     draftId: z.string(),
-     templateId: z.string(),
-     data: ContractFullrightSchema,
-   });
+   export const RenderDocxRequest = z.discriminatedUnion('kind', [
+     z.object({ kind: z.literal('contract-fullright'), draftId: z.string(), data: ContractFullrightSchema }),
+     z.object({ kind: z.literal('annex-newstore'),     draftId: z.string(), data: AnnexNewstoreSchema }),
+   ]);
    export const RenderDocxResponse = z.object({ tempPath: z.string() });
+
+   export const DraftSaveRequest = z.discriminatedUnion('kind', [
+     z.object({ kind: z.literal('contract-fullright'), id: z.string(), title: z.string(), data: ContractFullrightSchema }),
+     z.object({ kind: z.literal('annex-newstore'),     id: z.string(), title: z.string(), data: AnnexNewstoreSchema }),
+   ]);
    ```
+   Ghi chú: response của `template:list` trả `Array<{ kind: DocumentKind, id, title }>` để renderer biết có những kind nào khả dụng.
 3. `src/main/ipc/validate.ts`: helper `parseRequest(schema, payload)` ném `IpcValidationError` có channel name, để debug dễ.
 4. `src/main/ipc/handlers/*.ts`: mỗi handler nhận deps qua DI:
    ```ts
@@ -332,17 +397,19 @@ Tách toàn bộ I/O và Electron API ra khỏi `main/index.ts` thành các serv
 
 ### 5.2 Việc cần làm
 1. **Stores**:
-   - `draft-store.ts`: state = `{ id, formData, stores, isDirty, lastSavedAt }`. Actions: `hydrateFrom(draft)`, `setField(path, value)`, `addStore`, `removeStore(idx)`, `markSaved`, `reset`.
-   - `library-store.ts`: state = `{ templates, drafts, isLoading }`. Actions: `refreshTemplates`, `refreshDrafts`, `deleteDraft(id)`.
+   - `draft-store.ts`: state = `{ kind: DocumentKind | null, id, formData, isDirty, lastSavedAt }`. Actions: `hydrateFrom(draft)` (set cả `kind` và `formData`), `setField(path, value)`, `markSaved`, `reset`. Các action chuyên biệt theo kind (vd. `addStore` của contract-fullright) sống trong **slice riêng theo kind** (`draft-store/contract-fullright-actions.ts`, `draft-store/annex-newstore-actions.ts`) — store gốc gọi xuống slice qua dispatcher dựa theo `kind`.
+   - `library-store.ts`: state = `{ templates: TemplateManifestEntry[], drafts: DraftSummary[], isLoading }`. Actions: `refreshTemplates`, `refreshDrafts`, `deleteDraft(id)`. `templates` đã có field `kind`.
    - `settings-store.ts`: state = `{ settings, isDirty }`. Actions: `load`, `update(patch)`, `save`.
 2. **Services adapter** (`renderer/src/services/*.ts`): bọc `window.xms.*`. Component **không** gọi `window.xms` trực tiếp. Lý do: dễ mock trong storybook/test, dễ thêm cross-cutting (loading state, error toast).
 3. **Hooks**:
    - `use-autosave.ts`: nhận `(isDirty, onSave, debounceMs)`. Trích từ FormView.tsx:142-164.
    - `use-debounced.ts`: utility chung.
-4. **PreviewPane**: thay `import from '@shared/contract-render'` → `import { buildPreviewModel } from '@core/contract'`. Component selectors lấy `formData` từ `draft-store`.
-5. **FormView**: xoá toàn bộ `useState`, `useEffect` autosave, `useRef draftMetaRef/hydratedRef/dirtyRef`. Còn lại: select state + bind input → `setField`. Mục tiêu < 180 dòng.
-6. **LibraryView**: dùng `library-store`. Loại `useState` cho `templates`, `drafts`.
+4. **PreviewPane**: thay `import from '@shared/contract-render'` → `import { getDocumentLogic } from '@core/documents'`. Component đọc `kind` + `formData` từ `draft-store`, gọi `getDocumentLogic(kind).buildPreviewModel(formData)`. Hiển thị tuỳ kind (component con riêng cho contract-fullright vs annex-newstore).
+5. **FormView**: trở thành **router theo `kind`** — render `<ContractFullrightForm/>` hoặc `<AnnexNewstoreForm/>` từ `views/forms/<kind>/`. Mỗi form view chỉ lo UI cho kind của mình, không có `useEffect` autosave (đã hoist lên `App.tsx` qua `use-autosave` hook chạy chung). Mục tiêu mỗi form view < 180 dòng.
+   - Cấu trúc: `renderer/src/views/forms/contract-fullright/index.tsx`, `renderer/src/views/forms/annex-newstore/index.tsx`.
+6. **LibraryView**: dùng `library-store`. Loại `useState` cho `templates`, `drafts`. Hiển thị draft kèm badge `kind` để user phân biệt.
 7. **SettingsModal**: dùng `settings-store`. Loại bỏ form state cục bộ; thay bằng `update(patch)` rồi `save()`.
+8. **New-document flow**: thêm action `library-store.createDraft(kind)` — tạo draft mới với `kind` đã chọn; UI mở picker chọn kind trước khi vào FormView.
 
 ### 5.3 Yêu cầu kỹ thuật
 - Mỗi store ≤ 150 dòng. Nếu cần derived state, dùng selector function thuần (export riêng), không dùng middleware phức tạp.
@@ -373,14 +440,17 @@ Tách toàn bộ I/O và Electron API ra khỏi `main/index.ts` thành các serv
 - `core/pricing/format-money.test.ts`: 5+ case (số nguyên, có lẻ, 0, âm, lớn).
 - `core/pricing/number-to-vietnamese.test.ts`: 8+ case (đơn vị, hàng nghìn, triệu, tỷ, số 0, làm tròn).
 - `core/pricing/calculate-fees.test.ts`: 6+ case (1 store, nhiều store, VAT 0/10%, thời hạn lệch).
-- `core/contract/build-preview-model.test.ts`: golden test — input fixture JSON, so sánh với output JSON đã commit.
-- `core/contract/build-replacements.test.ts`: golden test — đảm bảo mọi placeholder của template được fill (so sánh keys).
-- `core/contract/derive-draft-title.test.ts`: 4+ case (đủ field, thiếu field, fallback).
+- `core/documents/contract-fullright/build-preview-model.test.ts`: golden test — input fixture JSON, so sánh với output JSON đã commit.
+- `core/documents/contract-fullright/build-replacements.test.ts`: golden test — đảm bảo mọi placeholder của template được fill (so sánh keys).
+- `core/documents/contract-fullright/derive-draft-title.test.ts`: 4+ case (đủ field, thiếu field, fallback).
+- `core/documents/annex-newstore/*.test.ts`: smoke test (logic chưa hoàn thiện đến khi có spec) — chỉ verify `getDocumentLogic('annex-newstore')` không throw, return shape đúng. **Khi nhận `annex-newstore.md`** từ user thì bổ sung golden test giống contract-fullright.
+- `core/documents/registry.test.ts`: với mỗi `kind` trong enum, đảm bảo `getDocumentLogic(kind)` trả về object có đầy đủ method theo `DocumentLogic` interface (chống quên đăng ký).
 - `core/date/format-date.test.ts`: 3+ case (ISO string, Date, invalid).
 
 **Infrastructure** (priority 2):
 - `infrastructure/storage/settings-repository.test.ts`: dùng `memfs` hoặc `tmp` directory. Test: load mặc định khi file không tồn tại, load + parse hợp lệ, fallback default khi corrupt JSON, save round-trip.
-- `infrastructure/storage/draft-repository.test.ts`: tương tự + list/delete.
+- `infrastructure/storage/draft-repository.test.ts`: tương tự + list/delete + draft `kind` nào không nằm trong enum thì reject.
+- `infrastructure/templates/template-loader.test.ts`: lần 1 đọc disk, lần 2 trả từ cache (spy fs.readFile), `invalidate(kind)` xoá đúng key.
 - `infrastructure/exporters/docx/docx-exporter.test.ts`: dùng template fixture nhỏ trong `tests/fixtures/`, kiểm tra: output là file ZIP hợp lệ, chứa `word/document.xml`, đã thay placeholder.
 
 ### 6.3 Yêu cầu kỹ thuật
@@ -451,15 +521,18 @@ Thêm rule trong `eslint.config.mjs`:
 > Tuân theo thứ tự để tránh vỡ build giữa chừng. Mỗi step kết thúc với app build + chạy được.
 
 1. **Setup hạ tầng** — thêm vitest, alias `@core`/`@infra`, ESLint rule trống (chưa enforce). Commit: `chore: add vitest and path aliases`.
-2. **Core extraction** — tạo `src/core/`, copy code từ `shared/contract-render.ts`. Tạm thời `shared/contract-render.ts` re-export từ `@core/*` để giữ tương thích. Viết test §6.2 Core. Commit: `refactor(core): extract pricing & contract domain`.
-3. **Schema canonicalization** — sửa `ContractFullrightSchema` cho khớp data path thật của form (hiện sai, ví dụ `pricing.compositionCopyright` vs `pricing.composition`). Validate trên fixture golden. Commit: `fix(schema): align contract schema with form data shape`.
-4. **Infrastructure extraction** — tạo `src/infrastructure/`, viết Settings/Draft/TemplateLoader/DocxExporter, container. Main vẫn import như cũ qua adapter shim. Test §6.2 Infra. Commit: `refactor(infra): extract repositories, exporter, services`.
-5. **IPC contracts** — tạo `shared/ipc/channels.ts` + `contracts.ts`. Refactor handlers vào `main/ipc/handlers/*`. Cập nhật preload. Commit: `refactor(ipc): typed contracts and handler split`.
-6. **Renderer stores** — tạo zustand stores + services. Refactor `FormView`, `LibraryView`, `SettingsModal`, `PreviewPane`. Commit: `refactor(renderer): zustand stores and services adapter`.
-7. **Cleanup** — xoá `shared/contract-render.ts` (re-export shim), xoá code chết trong `main/index.ts`, xoá field unused trong types. Commit: `chore: remove legacy compatibility shims`.
-8. **Lint hardening** — bật `no-restricted-imports`, `noUncheckedIndexedAccess`. Sửa các vi phạm phát sinh. Commit: `chore(lint): enforce layer boundaries`.
-9. **Manual smoke test** — `npm run dev`, chạy end-to-end: mở app → tạo draft → fill form → preview → render docx → save as → mở folder. Ghi notes vào PR.
-10. **Codify ARCHITECTURE.md** — xem §9.
+2. **Schema canonicalization** — định nghĩa `DocumentKind` enum, sửa `ContractFullrightSchema` cho khớp data path thật của form (hiện sai, ví dụ `pricing.compositionCopyright` vs `pricing.composition`), tạo `AnnexNewstoreSchema` (stub đến khi có spec), `Draft` thành discriminated union theo `kind`. Validate trên fixture golden. Commit: `feat(schema): introduce DocumentKind and align schemas`.
+3. **Core extraction (contract-fullright)** — tạo `src/core/{pricing,date,documents}/`, port code từ `shared/contract-render.ts` vào `core/documents/contract-fullright/`. Tạm thời `shared/contract-render.ts` re-export shim. Viết test §6.2 Core (contract-fullright). Commit: `refactor(core): extract pricing, date, contract-fullright logic`.
+4. **Document registry + annex stub** — thêm `core/documents/document-logic.ts`, `registry.ts`, `core/documents/annex-newstore/` (stub). Test registry. Commit: `feat(core): document registry and annex-newstore stub`.
+5. **Infrastructure extraction** — tạo `src/infrastructure/`, viết Settings/Draft/TemplateLoader (cache)/DocxExporter, container. Reorganize folder `templates/` thành `templates/<kind>/`. Main vẫn import như cũ qua adapter shim. Test §6.2 Infra. Commit: `refactor(infra): repositories, caching template loader, exporter`.
+6. **IPC contracts** — tạo `shared/ipc/channels.ts` + `contracts.ts` (discriminated union theo `kind`). Refactor handlers vào `main/ipc/handlers/*`. Cập nhật preload. Commit: `refactor(ipc): typed contracts with DocumentKind discriminator`.
+7. **Renderer stores** — tạo zustand stores + services. Refactor `FormView` thành router theo `kind`, tách `views/forms/contract-fullright/`, `views/forms/annex-newstore/`. `LibraryView`, `SettingsModal`, `PreviewPane` chuyển store. Commit: `refactor(renderer): zustand stores and per-kind form views`.
+8. **Cleanup** — xoá `shared/contract-render.ts` (re-export shim), xoá code chết trong `main/index.ts`, xoá field unused trong types. Commit: `chore: remove legacy compatibility shims`.
+9. **Lint hardening** — bật `no-restricted-imports`, `noUncheckedIndexedAccess`. Sửa các vi phạm phát sinh. Commit: `chore(lint): enforce layer boundaries`.
+10. **Manual smoke test** — `npm run dev`, chạy end-to-end: mở app → tạo draft contract-fullright → fill form → preview → render docx → save as → mở folder; tạo draft annex-newstore (stub) → verify list xuất hiện đúng badge kind. Ghi notes vào PR.
+11. **Codify ARCHITECTURE.md** — xem §9.
+
+> **Lưu ý**: Khi nhận file `annex-newstore.md` từ user (xem §12), hoàn thiện schema + logic cho annex sẽ là 1 PR riêng, **không** thuộc phạm vi PR refactor này. Refactor này chỉ đảm bảo "khung" sẵn sàng nhận annex.
 
 ### 8.1 Yêu cầu kỹ thuật cho từng commit
 - Mỗi commit step 2-8 phải để app vẫn `npm run dev` + `npm run build` thành công.
@@ -495,11 +568,20 @@ File `ARCHITECTURE.md` ở repo root là **nguồn sự thật** cho cấu trúc
    2) đăng ký vào container;
    3) thêm channel `render:<format>` nếu UI cần phân biệt;
    4) thêm test với fixture nhỏ.
-6. **Cách thêm field mới vào hợp đồng** — 5 bước:
-   1) thêm field vào `shared/schema/contract-fullright.ts`;
+6. **Cách thêm Document Kind mới** (ví dụ thêm `addendum-pricing-update`) — 8 bước:
+   1) thêm literal vào `shared/schema/document-kind.ts` enum;
+   2) tạo schema `shared/schema/<kind>.ts` (zod) + cập nhật `Draft` discriminated union;
+   3) tạo `core/documents/<kind>/` đầy đủ 4 file (`normalize-form-data`, `derive-draft-title`, `build-preview-model`, `build-replacements`) + `index.ts` export `DocumentLogic`;
+   4) đăng ký vào `core/documents/registry.ts` (compile sẽ báo lỗi nếu quên);
+   5) thêm `templates/<kind>/<kind>.template.docx` + `manifest.json`;
+   6) thêm IPC discriminant case vào `RenderDocxRequest` và `DraftSaveRequest` ở `shared/ipc/contracts.ts`;
+   7) tạo `renderer/src/views/forms/<kind>/index.tsx` + cập nhật router trong `FormView.tsx`;
+   8) thêm fixture + test golden trong `tests/fixtures/<kind>/`.
+7. **Cách thêm field mới vào 1 document kind** — 5 bước:
+   1) thêm field vào `shared/schema/<kind>.ts`;
    2) cập nhật fixture + golden output ở tests;
-   3) cập nhật `build-preview-model` + `build-replacements`;
-   4) cập nhật form trong `FormView`;
+   3) cập nhật `build-preview-model` + `build-replacements` của kind đó;
+   4) cập nhật form view của kind đó;
    5) cập nhật template DOCX nếu cần placeholder mới.
 7. **Anti-patterns đã loại bỏ** — bullet list (FormView monolith, IPC `unknown` payload, …) để đời sau không tái phạm.
 8. **Test policy** — Core 90% coverage, Infra có smoke test, UI test thủ công cho đến khi có Playwright/Spectron.
@@ -523,10 +605,12 @@ File `ARCHITECTURE.md` ở repo root là **nguồn sự thật** cho cấu trúc
 | Rủi ro | Tác động | Mitigation |
 |---|---|---|
 | Big-bang refactor làm vỡ flow render DOCX | App không export được hợp đồng | Smoke test thủ công sau mỗi step §8; giữ golden test cho `build-replacements` |
-| Schema `ContractFullrightSchema` hiện sai field path → khi enforce validation sẽ reject draft cũ | Mất draft đã lưu | Bước §8.3 — viết migration nhỏ trong `JsonDraftRepository.load`: nếu parse fail, log warning + cố parse với schema cũ rồi map sang mới |
+| `DocumentKind` rò rỉ thành `if/else` rải rác (coupling muộn) | Thêm kind sau này phải sửa nhiều chỗ | Áp dụng pattern `DOCUMENT_REGISTRY` từ phase 1 (§2.2 step 5) + ESLint rule cấm `=== 'contract-fullright'` ngoài file `registry.ts` (custom rule hoặc grep test) |
+| Annex chưa có spec → schema/logic là stub, dễ quên hoàn thiện | Annex không xuất được DOCX | Phase này tạo CI check: golden test annex skipped khi `tests/fixtures/annex-newstore/` chưa tồn tại, log warning rõ ràng. Theo dõi qua issue/TODO trong ARCHITECTURE.md |
+| Cache template binary giữ binary cũ sau khi user thay file `.docx` | Render ra hợp đồng phiên bản cũ mà không hay | Document trong ARCHITECTURE.md: thay template → restart app. Trong dev, expose `templateLoader.invalidate()` qua DevTools (gắn `window.__xmsDev` chỉ ở dev build) |
 | Zustand store tổ chức sai → re-render thừa | UI chậm | Quy tắc selector hẹp (§5.3) + dev tip trong ARCHITECTURE.md |
 | Thiếu test cho IPC layer | Bug rò rỉ giữa main/renderer | Phase này chấp nhận, nhưng ARCHITECTURE.md note rõ là “to-do: contract test cho preload” |
-| `noUncheckedIndexedAccess` bật muộn → nhiều file đỏ | Tốn thời gian sửa cuối phase | Bật từ step §8.1 (setup) ở mức warning, chuyển error ở step §8.8 |
+| `noUncheckedIndexedAccess` bật muộn → nhiều file đỏ | Tốn thời gian sửa cuối phase | Bật từ step §8.1 (setup) ở mức warning, chuyển error ở step §8.9 |
 
 ---
 
@@ -542,10 +626,16 @@ File `ARCHITECTURE.md` ở repo root là **nguồn sự thật** cho cấu trúc
 
 ---
 
-## 12. Câu hỏi mở (cần xác nhận trước khi vào step §8.3)
+## 12. Câu hỏi mở — trạng thái
 
-1. Khi sửa `ContractFullrightSchema` cho khớp form, có draft nào trên máy thật cần migrate không? Nếu có, cung cấp 1 file mẫu để viết migration chính xác.
-2. `templates/contract-fullright.dotx` có phải là template cố định duy nhất không, hay sẽ có thêm template khác? (Ảnh hưởng đến shape của `TemplateManifestEntry`.)
-3. Có muốn `DocxExporter` cache template binary trong RAM không (giảm I/O lặp lại) hay luôn đọc tươi để đơn giản?
+| # | Câu hỏi | Trả lời | Tác động vào plan |
+|---|---|---|---|
+| 1 | Có draft cũ cần migrate khi sửa schema? | **Không** | Bỏ migration logic trong `JsonDraftRepository.load`. Schema mới có thể reject draft cũ; đó là chấp nhận được. |
+| 2 | Có thêm loại tài liệu nào ngoài `contract-fullright`? | **Có — `annex-newstore`** (Annex điều khoản mở mới cửa hàng) | Plan đã refactor sang multi-document-kind: `DocumentKind` enum, `DocumentRegistry`, `core/documents/<kind>/`, IPC discriminated union, FormView router theo kind. |
+| 3 | Cache template binary trong RAM? | **Có** | `CachingFsTemplateLoader` với `Map<DocumentKind, Uint8Array>` + `invalidate()` API. |
 
-> Nếu câu trả lời là “chưa cần lo” thì plan vẫn chạy được — mặc định: không migrate, 1 template, không cache.
+### 12.1 Còn cần từ user
+
+- **File `annex-newstore.md`** (hoặc danh sách field cụ thể của annex): hiện chưa có trong working tree / git history.
+  - **Khi nào cần**: trước khi viết PR riêng hoàn thiện schema + logic annex. **Không** block PR refactor này — refactor chỉ tạo khung + stub annex.
+  - **Khi nhận được**: bổ sung field vào `shared/schema/annex-newstore.ts`, cài đặt thật cho `core/documents/annex-newstore/*`, viết golden test, đặt template `.docx` vào `templates/annex-newstore/`.
