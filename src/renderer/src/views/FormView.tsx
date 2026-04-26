@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { v4 as uuidv4 } from 'uuid'
 import Rack from '../components/Rack'
 import StatusBar from '../components/StatusBar'
 
@@ -9,16 +10,173 @@ interface Props {
   onOpenSettings: () => void
 }
 
+const EDITABLE_FIELD_KEYS = [
+  'meta.contractNo',
+  'meta.signedDate',
+  'partyB.name',
+  'partyB.address',
+  'partyB.taxCode',
+  'partyB.phone',
+  'partyB.representative',
+  'partyB.position',
+  'partyB.bankAccount',
+  'partyB.bankName',
+  'partyB.bankBranch',
+  'term.startDate',
+  'term.endDate',
+  'pricing.relatedRights.year',
+  'pricing.relatedRights.month',
+  'pricing.composition.year',
+  'pricing.composition.month',
+  'pricing.account.year',
+  'pricing.account.month',
+  'pricing.app.year',
+  'pricing.web.year',
+  'pricing.device.year',
+  'invoice.company',
+  'invoice.address',
+  'invoice.taxCode',
+  'contact.a.name',
+  'contact.a.email',
+  'contact.a.phone',
+  'contact.b.name',
+  'contact.b.email',
+  'contact.b.phone'
+] as const
+
+interface StoreRow {
+  id: string
+  name: string
+  address: string
+  usingTerm: string
+  months: string
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function normalizeFormData(data: unknown): Record<string, string> {
+  if (!isRecord(data)) return {}
+  return Object.entries(data).reduce<Record<string, string>>((acc, [key, value]) => {
+    if (typeof value === 'string') acc[key] = value
+    if (typeof value === 'number' || typeof value === 'boolean') acc[key] = String(value)
+    return acc
+  }, {})
+}
+
+function normalizeStores(data: unknown): StoreRow[] {
+  if (!isRecord(data) || !Array.isArray(data.stores)) return []
+  return data.stores
+    .filter(isRecord)
+    .map((row) => ({
+      id: typeof row.id === 'string' ? row.id : uuidv4(),
+      name: typeof row.name === 'string' ? row.name : '',
+      address: typeof row.address === 'string' ? row.address : '',
+      usingTerm: typeof row.usingTerm === 'string' ? row.usingTerm : '',
+      months: typeof row.months === 'string' || typeof row.months === 'number' ? String(row.months) : ''
+    }))
+}
+
+function deriveDraftTitle(data: Record<string, string>): string {
+  const contractNo = data['meta.contractNo']?.trim()
+  const partyName = data['partyB.name']?.trim()
+  if (contractNo && partyName) return `${contractNo} · ${partyName}`
+  if (contractNo) return contractNo
+  if (partyName) return partyName
+  return 'Untitled'
+}
+
 export default function FormView({ draftId, templateId, onBack, onOpenSettings }: Props) {
   const [activeTab, setActiveTab] = useState<'main' | 'app1' | 'app2'>('main')
   const [formData, setFormData] = useState<Record<string, string>>({})
+  const [stores, setStores] = useState<StoreRow[]>([])
+  const draftMetaRef = useRef<{ createdAt: string | null; exportedPath: string | null }>({
+    createdAt: null,
+    exportedPath: null
+  })
+  const hydratedRef = useRef(false)
+  const dirtyRef = useRef(false)
 
-  const filledCount = Object.values(formData).filter(Boolean).length
   const totalFields = 45
+  const filledCount = useMemo(
+    () => EDITABLE_FIELD_KEYS.filter((key) => formData[key]?.trim()).length,
+    [formData]
+  )
   const completeness = Math.round((filledCount / totalFields) * 100)
+  const draftTitle = useMemo(() => deriveDraftTitle(formData), [formData])
+
+  useEffect(() => {
+    let alive = true
+    hydratedRef.current = false
+    dirtyRef.current = false
+    draftMetaRef.current = { createdAt: null, exportedPath: null }
+
+    window.api.loadDraft(draftId)
+      .then((draft) => {
+        if (!alive) return
+        draftMetaRef.current = {
+          createdAt: draft?.createdAt ?? null,
+          exportedPath: draft?.exportedPath ?? null
+        }
+        setFormData(normalizeFormData(draft?.data))
+        setStores(normalizeStores(draft?.data))
+        hydratedRef.current = true
+      })
+      .catch(() => {
+        if (!alive) return
+        setFormData({})
+        setStores([])
+        hydratedRef.current = true
+      })
+
+    return () => {
+      alive = false
+    }
+  }, [draftId])
+
+  useEffect(() => {
+    if (!hydratedRef.current || !dirtyRef.current) return
+
+    const handle = window.setTimeout(() => {
+      const now = new Date().toISOString()
+      window.api.saveDraft({
+        id: draftId,
+        templateId,
+        title: draftTitle,
+        createdAt: draftMetaRef.current.createdAt ?? now,
+        updatedAt: now,
+        exportedPath: draftMetaRef.current.exportedPath,
+        data: { ...formData, stores }
+      }).then((result) => {
+        draftMetaRef.current.createdAt ??= now
+        if (result?.savedAt) dirtyRef.current = false
+      }).catch(() => {
+        /* keep dirty state so the next edit retries */
+      })
+    }, 1200)
+
+    return () => window.clearTimeout(handle)
+  }, [draftId, draftTitle, formData, stores, templateId])
 
   function updateField(key: string, value: string) {
+    dirtyRef.current = true
     setFormData((prev) => ({ ...prev, [key]: value }))
+  }
+
+  function addStoreRow() {
+    dirtyRef.current = true
+    setStores((prev) => [...prev, { id: uuidv4(), name: '', address: '', usingTerm: '', months: '' }])
+  }
+
+  function updateStoreRow(id: string, key: keyof Omit<StoreRow, 'id'>, value: string) {
+    dirtyRef.current = true
+    setStores((prev) => prev.map((row) => row.id === id ? { ...row, [key]: value } : row))
+  }
+
+  function deleteStoreRow(id: string) {
+    dirtyRef.current = true
+    setStores((prev) => prev.filter((row) => row.id !== id))
   }
 
   return (
@@ -45,7 +203,7 @@ export default function FormView({ draftId, templateId, onBack, onOpenSettings }
       <div className="form-split">
         <div className="form-pane">
           <div className="form-scroll">
-            <Rack id="meta" title="CONTRACT METADATA" filled={formData['meta.contractNo'] ? 1 : 0} total={2} defaultOpen cueColor="picton" index={0}>
+            <Rack id="meta" title="CONTRACT METADATA" filled={['meta.contractNo','meta.signedDate'].filter(k => formData[k]).length} total={2} defaultOpen cueColor="picton" index={0}>
               <div className="rack-grid">
                 <div className="rack-field">
                   <label className="field-label">SỐ HỢP ĐỒNG</label>
@@ -108,10 +266,38 @@ export default function FormView({ draftId, templateId, onBack, onOpenSettings }
               </div>
             </Rack>
 
-            <Rack id="stores" title="STORE LIST (APPENDIX 1)" filled={0} total={0} badge="0 rows" cueColor="blue" index={7}>
-              <div className="rack-empty">
-                <span>Chưa có cửa hàng nào. Paste từ Excel hoặc thêm thủ công.</span>
-                <button className="rack-add-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>THÊM CỬA HÀNG</button>
+            <Rack id="stores" title="STORE LIST (APPENDIX 1)" filled={stores.length} total={0} badge={`${stores.length} rows`} cueColor="blue" index={7}>
+              <div className="clip-table">
+                <div className="clip-table-toolbar">
+                  <span className="clip-table-meta">Appendix 1 · Store clip slots</span>
+                  <button className="rack-add-btn" type="button" onClick={addStoreRow}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>THÊM CỬA HÀNG
+                  </button>
+                </div>
+                <div className="clip-grid">
+                  <div className="clip-row clip-head">
+                    <span />
+                    <span>Tên cửa hàng</span>
+                    <span>Địa chỉ</span>
+                    <span>Thời hạn</span>
+                    <span>Tháng</span>
+                    <span />
+                  </div>
+                  {stores.length === 0 ? (
+                    <div className="clip-empty">Chưa có cửa hàng nào. Dùng nút thêm hoặc paste từ Excel ở bước tiếp theo.</div>
+                  ) : stores.map((store, index) => (
+                    <div className="clip-row" key={store.id}>
+                      <span className="clip-launch">{index + 1}</span>
+                      <input className="clip-cell" value={store.name} onChange={(e) => updateStoreRow(store.id, 'name', e.target.value)} placeholder="Store name" />
+                      <input className="clip-cell" value={store.address} onChange={(e) => updateStoreRow(store.id, 'address', e.target.value)} placeholder="Address" />
+                      <input className="clip-cell" value={store.usingTerm} onChange={(e) => updateStoreRow(store.id, 'usingTerm', e.target.value)} placeholder="01/05/2026 - 30/04/2027" />
+                      <input className="clip-cell tnum" inputMode="numeric" value={store.months} onChange={(e) => updateStoreRow(store.id, 'months', e.target.value)} placeholder="12" />
+                      <button className="clip-delete" type="button" onClick={() => deleteStoreRow(store.id)} title="Delete row">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             </Rack>
 
@@ -143,7 +329,7 @@ export default function FormView({ draftId, templateId, onBack, onOpenSettings }
         </div>
       </div>
 
-      <StatusBar completeness={completeness} filledCount={filledCount} totalFields={totalFields} draftTitle={formData['meta.contractNo'] || 'Untitled'} />
+      <StatusBar completeness={completeness} filledCount={filledCount} totalFields={totalFields} draftTitle={draftTitle} />
     </div>
   )
 }

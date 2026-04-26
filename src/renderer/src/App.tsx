@@ -31,18 +31,22 @@ export default function App() {
   return (
     <div className="app-shell">
       {view.type === 'library' && (
-        <LibraryView
-          onOpenTemplate={navigateToForm}
-          onOpenSettings={() => setShowSettings(true)}
-        />
+        <div className="view-enter" key="library">
+          <LibraryView
+            onOpenTemplate={navigateToForm}
+            onOpenSettings={() => setShowSettings(true)}
+          />
+        </div>
       )}
       {view.type === 'form' && (
-        <FormView
-          draftId={view.draftId}
-          templateId={view.templateId}
-          onBack={navigateToLibrary}
-          onOpenSettings={() => setShowSettings(true)}
-        />
+        <div className="view-enter" key={`form-${view.draftId}`}>
+          <FormView
+            draftId={view.draftId}
+            templateId={view.templateId}
+            onBack={navigateToLibrary}
+            onOpenSettings={() => setShowSettings(true)}
+          />
+        </div>
       )}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
     </div>
