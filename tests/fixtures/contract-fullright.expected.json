@@ -1,0 +1,43 @@
+{
+  "meta.contractNo": "HD-2026-001",
+  "meta.signedDate": "2026-04-26",
+  "partyB.name": "XMS Test Client",
+  "partyB.address": "123 Nguyen Hue, District 1, Ho Chi Minh City",
+  "partyB.taxCode": "0312345678",
+  "partyB.phone": "0909000000",
+  "partyB.representative": "Nguyen Van A",
+  "partyB.position": "Director",
+  "partyB.bankAccount": "123456789",
+  "partyB.bankName": "Test Bank",
+  "partyB.bankBranch": "Ho Chi Minh",
+  "term.startDate": "2026-05-01",
+  "term.endDate": "2027-04-30",
+  "pricing.relatedRights.year": "1200000",
+  "pricing.relatedRights.month": "100000",
+  "pricing.composition.year": "960000",
+  "pricing.composition.month": "80000",
+  "pricing.account.year": "600000",
+  "pricing.account.month": "50000",
+  "pricing.app.year": "300000",
+  "pricing.web.year": "240000",
+  "pricing.device.year": "180000",
+  "invoice.company": "XMS Test Client",
+  "invoice.address": "123 Nguyen Hue, District 1, Ho Chi Minh City",
+  "invoice.taxCode": "0312345678",
+  "contact.a.name": "Tran Thi B",
+  "contact.a.email": "a@example.com",
+  "contact.a.phone": "0909111111",
+  "contact.b.name": "Le Van C",
+  "contact.b.email": "b@example.com",
+  "contact.b.phone": "0909222222",
+  "stores": [
+    {
+      "id": "store-1",
+      "name": "Store 1",
+      "address": "1 Le Loi",
+      "usingTerm": "12 months",
+      "months": "12"
+    }
+  ],
+  "vatPct": 10
+}

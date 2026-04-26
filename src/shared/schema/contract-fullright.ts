@@ -1,69 +1,56 @@
 import { z } from 'zod'
 
-export const StoreRowSchema = z.object({
-  name: z.string().min(1, 'Tên cửa hàng không được trống'),
-  address: z.string().min(1, 'Địa chỉ không được trống'),
-  usingTerm: z.string().min(1, 'Thời hạn sử dụng không được trống'),
-  months: z.number().min(0).max(120)
+const IsoDateSchema = z.string().refine((value) => value === '' || /^\d{4}-\d{2}-\d{2}$/.test(value), {
+  message: 'Ngày phải có định dạng YYYY-MM-DD'
 })
 
-export const FeeLineSchema = z.object({
-  categoryId: z.enum([
-    'related_rights',
-    'composition_copyright',
-    'account',
-    'application',
-    'website',
-    'device'
-  ]),
-  unitPrice: z.number().min(0),
-  storeCount: z.number().int().min(0),
-  months: z.number().min(0).max(120)
+const TextFieldSchema = z.string().default('')
+const DateFieldSchema = IsoDateSchema.default('')
+const NumericTextFieldSchema = z.union([z.string(), z.number()]).transform(String).default('')
+
+export const StoreRowSchema = z.object({
+  id: z.string().optional(),
+  name: TextFieldSchema,
+  address: TextFieldSchema,
+  usingTerm: TextFieldSchema,
+  months: NumericTextFieldSchema
 })
 
 export const ContractFullrightSchema = z.object({
-  meta: z.object({
-    contractNo: z.string().min(1),
-    signedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
-  }),
-  partyB: z.object({
-    name: z.string().min(1),
-    address: z.string().min(1),
-    taxCode: z.string().regex(/^\d{10}(-\d{3})?$|^\d{13}$/),
-    phone: z.string().min(1),
-    representative: z.string().min(1),
-    position: z.string().min(1),
-    bankAccount: z.string().min(1),
-    bankName: z.string().min(1),
-    bankBranch: z.string().min(1)
-  }),
-  term: z.object({
-    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
-  }),
-  pricing: z.object({
-    relatedRights: z.object({ perStoreYear: z.number(), perStoreMonth: z.number() }),
-    compositionCopyright: z.object({ perStoreYear: z.number(), perStoreMonth: z.number() }),
-    account: z.object({ perStoreYear: z.number(), perStoreMonth: z.number() }),
-    application: z.object({ perStoreYear: z.number() }),
-    website: z.object({ perStoreYear: z.number() }),
-    device: z.object({ perStoreYear: z.number() })
-  }),
-  invoice: z.object({
-    companyName: z.string(),
-    address: z.string(),
-    taxCode: z.string(),
-    linkedFromPartyB: z.boolean().default(true)
-  }),
-  contacts: z.object({
-    partyA: z.object({ name: z.string(), email: z.string().email(), phone: z.string() }),
-    partyB: z.object({ name: z.string(), email: z.string().email(), phone: z.string() })
-  }),
-  stores: z.array(StoreRowSchema).min(1, 'Phải có ít nhất 1 cửa hàng'),
-  fees: z.array(FeeLineSchema).min(1),
+  'meta.contractNo': TextFieldSchema,
+  'meta.signedDate': DateFieldSchema,
+  'partyB.name': TextFieldSchema,
+  'partyB.address': TextFieldSchema,
+  'partyB.taxCode': TextFieldSchema,
+  'partyB.phone': TextFieldSchema,
+  'partyB.representative': TextFieldSchema,
+  'partyB.position': TextFieldSchema,
+  'partyB.bankAccount': TextFieldSchema,
+  'partyB.bankName': TextFieldSchema,
+  'partyB.bankBranch': TextFieldSchema,
+  'term.startDate': DateFieldSchema,
+  'term.endDate': DateFieldSchema,
+  'pricing.relatedRights.year': NumericTextFieldSchema,
+  'pricing.relatedRights.month': NumericTextFieldSchema,
+  'pricing.composition.year': NumericTextFieldSchema,
+  'pricing.composition.month': NumericTextFieldSchema,
+  'pricing.account.year': NumericTextFieldSchema,
+  'pricing.account.month': NumericTextFieldSchema,
+  'pricing.app.year': NumericTextFieldSchema,
+  'pricing.web.year': NumericTextFieldSchema,
+  'pricing.device.year': NumericTextFieldSchema,
+  'invoice.company': TextFieldSchema,
+  'invoice.address': TextFieldSchema,
+  'invoice.taxCode': TextFieldSchema,
+  'contact.a.name': TextFieldSchema,
+  'contact.a.email': TextFieldSchema,
+  'contact.a.phone': TextFieldSchema,
+  'contact.b.name': TextFieldSchema,
+  'contact.b.email': TextFieldSchema,
+  'contact.b.phone': TextFieldSchema,
+  stores: z.array(StoreRowSchema).default([]),
   vatPct: z.number().min(0).max(100).default(10)
-})
+}).strict()
 
 export type ContractFullright = z.infer<typeof ContractFullrightSchema>
 export type StoreRow = z.infer<typeof StoreRowSchema>
-export type FeeLine = z.infer<typeof FeeLineSchema>
