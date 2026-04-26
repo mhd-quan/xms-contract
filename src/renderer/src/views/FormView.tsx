@@ -10,7 +10,8 @@ import {
   type NormalizedStoreRow,
   type StoreRowData
 } from '@core/documents/contract-fullright'
-import { coerceDocumentKind } from '@shared/schema/document-kind'
+import type { DraftSaveRequestInput, RenderDocxRequestInput } from '@shared/ipc/contracts'
+import { coerceDocumentKind, DocumentKind } from '@shared/schema/document-kind'
 
 interface Props {
   draftId: string
@@ -75,6 +76,32 @@ export default function FormView({ draftId, templateId, onBack, onOpenSettings }
   const completeness = Math.round((filledCount / totalFields) * 100)
   const draftTitle = useMemo(() => deriveDraftTitle(formData), [formData])
 
+  function buildDraftPayload(nextExportedPath = draftMetaRef.current.exportedPath): DraftSaveRequestInput {
+    const now = new Date().toISOString()
+    if (draftKind === DocumentKind.AnnexNewstore) {
+      return {
+        id: draftId,
+        kind: DocumentKind.AnnexNewstore,
+        templateId: DocumentKind.AnnexNewstore,
+        title: draftTitle,
+        createdAt: draftMetaRef.current.createdAt ?? now,
+        updatedAt: now,
+        exportedPath: nextExportedPath,
+        data: {}
+      }
+    }
+    return {
+      id: draftId,
+      kind: DocumentKind.ContractFullright,
+      templateId: DocumentKind.ContractFullright,
+      title: draftTitle,
+      createdAt: draftMetaRef.current.createdAt ?? now,
+      updatedAt: now,
+      exportedPath: nextExportedPath,
+      data: { ...formData, stores }
+    }
+  }
+
   useEffect(() => {
     let alive = true
     hydratedRef.current = false
@@ -110,16 +137,7 @@ export default function FormView({ draftId, templateId, onBack, onOpenSettings }
 
     const handle = window.setTimeout(() => {
       const now = new Date().toISOString()
-      window.api.saveDraft({
-        id: draftId,
-        kind: draftKind,
-        templateId,
-        title: draftTitle,
-        createdAt: draftMetaRef.current.createdAt ?? now,
-        updatedAt: now,
-        exportedPath: draftMetaRef.current.exportedPath,
-        data: { ...formData, stores }
-      }).then((result) => {
+      window.api.saveDraft(buildDraftPayload()).then((result) => {
         draftMetaRef.current.createdAt ??= now
         if (result?.savedAt) dirtyRef.current = false
       }).catch(() => {
@@ -156,16 +174,7 @@ export default function FormView({ draftId, templateId, onBack, onOpenSettings }
 
   async function persistDraft(nextExportedPath = draftMetaRef.current.exportedPath) {
     const now = new Date().toISOString()
-    await window.api.saveDraft({
-      id: draftId,
-      kind: draftKind,
-      templateId,
-      title: draftTitle,
-      createdAt: draftMetaRef.current.createdAt ?? now,
-      updatedAt: now,
-      exportedPath: nextExportedPath,
-      data: { ...formData, stores }
-    })
+    await window.api.saveDraft(buildDraftPayload(nextExportedPath))
     draftMetaRef.current.createdAt ??= now
     dirtyRef.current = false
   }
@@ -174,12 +183,13 @@ export default function FormView({ draftId, templateId, onBack, onOpenSettings }
     setIsExporting(true)
     try {
       await persistDraft()
-      const rendered = await window.api.renderDocx({
+      const renderPayload: RenderDocxRequestInput = {
         draftId,
-        kind: draftKind,
-        templateId,
+        kind: DocumentKind.ContractFullright,
+        templateId: DocumentKind.ContractFullright,
         data: { ...formData, stores }
-      })
+      }
+      const rendered = await window.api.renderDocx(renderPayload)
       const saved = await window.api.saveAs(rendered.tempPath, suggestedExportName())
       if ('finalPath' in saved) {
         draftMetaRef.current.exportedPath = saved.finalPath
