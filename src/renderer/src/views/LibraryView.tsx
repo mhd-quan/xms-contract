@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { coerceDocumentKind, type DocumentKind } from '@shared/schema/document-kind'
+import { coerceDocumentKind, DocumentKind, type DocumentKind as DocumentKindType } from '@shared/schema/document-kind'
 
 interface Props {
   onOpenTemplate: (draftId: string, templateId: string) => void
@@ -9,7 +9,7 @@ interface Props {
 
 interface DraftSummary {
   id: string
-  kind?: DocumentKind
+  kind?: DocumentKindType
   templateId: string
   title: string
   createdAt: string
@@ -18,7 +18,7 @@ interface DraftSummary {
 
 interface TemplateEntry {
   id: string
-  kind?: DocumentKind
+  kind?: DocumentKindType
   name: string
   subtitle: string
   version: string
@@ -51,7 +51,11 @@ export default function LibraryView({ onOpenTemplate, onOpenSettings }: Props) {
     const now = new Date().toISOString()
     const kind = coerceDocumentKind(templateId)
     try {
-      await window.api.saveDraft({ id: draftId, kind, templateId: kind, title: 'Untitled', createdAt: now, updatedAt: now, exportedPath: null, data: {} })
+      if (kind === DocumentKind.AnnexNewstore) {
+        await window.api.saveDraft({ id: draftId, kind, templateId: kind, title: 'Untitled', createdAt: now, updatedAt: now, exportedPath: null, data: {} })
+      } else {
+        await window.api.saveDraft({ id: draftId, kind: DocumentKind.ContractFullright, templateId: DocumentKind.ContractFullright, title: 'Untitled', createdAt: now, updatedAt: now, exportedPath: null, data: {} })
+      }
     } catch { /* proceed */ }
     onOpenTemplate(draftId, kind)
   }
