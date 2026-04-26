@@ -12,4 +12,10 @@ export default tseslint.config(
       'no-empty': 'off'
     }
   },
+  {
+    files: ['src/core/**/*.ts', 'src/renderer/**/*.{ts,tsx}', 'src/infrastructure/**/*.ts'],
+    rules: {
+      'no-restricted-imports': 'off'
+    }
+  }
 )

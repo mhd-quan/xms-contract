@@ -17,6 +17,8 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx --fix",
     "format": "prettier --write .",
     "generate:template-assets": "node scripts/generate-template-assets.mjs"
@@ -46,12 +48,14 @@
     "@types/react-dom": "^18.3.5",
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/ui": "^4.1.5",
     "electron": "^35.1.2",
     "electron-builder": "^25.1.8",
     "electron-vite": "^3.0.0",
     "eslint": "^9.22.0",
     "prettier": "^3.5.3",
     "typescript": "^5.8.2",
-    "vite": "^6.2.4"
+    "vite": "^6.2.4",
+    "vitest": "^4.1.5"
   }
 }
