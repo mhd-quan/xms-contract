@@ -3,10 +3,12 @@ interface Props {
   filledCount: number
   totalFields: number
   draftTitle: string
+  exportAvailable?: boolean
 }
 
-export default function StatusBar({ completeness, filledCount, totalFields, draftTitle }: Props) {
-  const isReady = completeness >= 100
+export default function StatusBar({ completeness, filledCount, totalFields, draftTitle, exportAvailable = false }: Props) {
+  const isComplete = completeness >= 100
+  const canExport = exportAvailable && isComplete
 
   return (
     <div className="statusbar">
@@ -27,7 +29,11 @@ export default function StatusBar({ completeness, filledCount, totalFields, draf
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
           OPEN IN WORD
         </button>
-        <button className={`statusbar-btn export-action${isReady ? ' ready' : ''}`}>
+        <button
+          className={`statusbar-btn export-action${canExport ? ' ready' : ''}`}
+          disabled={!canExport}
+          title={isComplete ? 'DOCX export pipeline is not wired yet' : 'Fill required fields before export'}
+        >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 16V4"/><path d="m8 8 4-4 4 4"/><path d="M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>
           EXPORT DOCX
         </button>

@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
+import type { AppSettings } from '@shared/types'
 
 interface Props {
   onClose: () => void
 }
 
 export default function SettingsModal({ onClose }: Props) {
+  const [persistedSettings, setPersistedSettings] = useState<AppSettings | null>(null)
   const [settings, setSettings] = useState({
     bankAccount: '', bankName: '', bankBranch: '',
     poaNo: '', poaDate: '',
@@ -20,6 +22,7 @@ export default function SettingsModal({ onClose }: Props) {
     try {
       const s = await window.api.getSettings()
       if (s?.partyA) {
+        setPersistedSettings(s)
         setSettings({
           bankAccount: s.partyA.bankAccount || '',
           bankName: s.partyA.bankName || '',
@@ -38,14 +41,21 @@ export default function SettingsModal({ onClose }: Props) {
 
   async function handleSave() {
     try {
+      const defaults = persistedSettings?.defaults ?? {
+        vatPct: 10,
+        defaultContactA: { name: '', email: '', phone: '' }
+      }
       await window.api.saveSettings({
         partyA: {
           bankAccount: settings.bankAccount, bankName: settings.bankName, bankBranch: settings.bankBranch,
           poaNo: settings.poaNo, poaDate: settings.poaDate,
           paymentBankAccount: settings.paymentBankAccount, paymentBankName: settings.paymentBankName
         },
-        defaults: { vatPct: 10, defaultContactA: { name: settings.contactName, email: settings.contactEmail, phone: settings.contactPhone } },
-        ui: { lastFormPaneWidthPct: 42, previewSyncScroll: false }
+        defaults: {
+          ...defaults,
+          defaultContactA: { name: settings.contactName, email: settings.contactEmail, phone: settings.contactPhone }
+        },
+        ui: persistedSettings?.ui ?? { lastFormPaneWidthPct: 42, previewSyncScroll: false }
       })
       onClose()
     } catch {}

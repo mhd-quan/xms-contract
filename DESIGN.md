@@ -78,3 +78,49 @@ The interface uses a multi-layered gray-scale system with high-saturation functi
 - **Single-Window Workflow:** Avoid pop-up windows. Content should appear in the lower Detail View or the Side Browser.
 - **Hover States:** Subtle brightening of buttons or borders to indicate interactivity.
 - **Drag & Drop:** The UI is built around dragging samples/effects from the browser into tracks/racks.
+
+---
+
+## 6. XMS Contract App Variant
+
+The shipped app uses a darker, purple-shifted Ableton-adjacent palette rather than neutral Ableton gray. This is intentional for consistency with the XMS desktop app family.
+
+### 6.1 Locked App Tokens
+
+| Token | Value | Usage |
+| :--- | :--- | :--- |
+| `--bg-root` | `#1e1e22` | Main app canvas |
+| `--bg-surface` | `#1a1a1e` | Library cards, rack bodies, preview shell |
+| `--bg-elevated` | `#28282e` | Rack headers and controls |
+| `--text-primary` | `#e8e8ec` | Active values and primary labels |
+| `--text-secondary` | `#b0b0b8` | Secondary labels and active neutral chips |
+| `--pear` | `#CFF533` | Brand signal, NEW CTA, primary modal action, selection |
+| `--picton` | `#44CCFF` | Metadata cue color and cyan utility signal |
+| `--daw-orange` | `#FF8B00` | Export/transport-ready states |
+
+### 6.2 Cue Palette
+
+Form racks use Ableton track-color logic: each rack owns a cue strip, LED, focus ring, badge, and add-button accent. Cue colors are functional section identity, not decoration.
+
+| Rack | Cue |
+| :--- | :--- |
+| Contract Metadata | Picton |
+| Party B Identity | Rose |
+| Party B Bank | Gold |
+| Term | Green |
+| Service Pricing | DAW Orange |
+| VAT Invoice Info | Violet |
+| Contact Persons | Teal |
+| Store List | Blue |
+| Fee Table | Indigo |
+
+### 6.3 Component Rules
+
+- Rectangular controls, panels, racks, and modals use a maximum `3px` radius.
+- Avoid elevation shadows; separate layers through borders, darker/lighter surfaces, and inset cue lines.
+- Pear and picton must not become default focus colors. Rack focus follows the active rack cue; global focus uses neutral gray.
+- Status/completeness uses a segmented VU meter rather than a plain progress bar.
+
+### 6.4 Document Output Variant
+
+The app UI is dark and instrument-like; exported/previewed documents are allowed to be light, print-focused, and Word-compatible. This split is intentional. Document styling should optimize review and printing rather than forcing the dark app palette into `.docx` output.
