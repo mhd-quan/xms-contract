@@ -28,11 +28,11 @@ describe('calculateFees', () => {
   })
 
   it('rounds uneven average months', () => {
-    expect(calculateFees([{ months: 1 }, { months: 2 }], rates, 10).feeRows[0].months).toBe(2)
+    expect(calculateFees([{ months: 1 }, { months: 2 }], rates, 10).feeRows[0]?.months).toBe(2)
   })
 
   it('uses at least one month when stores exist', () => {
-    expect(calculateFees([{ months: 0 }], rates, 10).feeRows[0].months).toBe(1)
+    expect(calculateFees([{ months: 0 }], rates, 10).feeRows[0]?.months).toBe(1)
   })
 
   it('returns zero totals without stores', () => {

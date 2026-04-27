@@ -21,6 +21,8 @@ export function buildClickReplacements(
   const partyA = settings?.partyA
   const stores = [...model.stores]
   while (stores.length < 2) stores.push({ name: BLANK_VALUE, address: BLANK_VALUE, usingTerm: BLANK_VALUE, months: BLANK_VALUE })
+  const firstStore = stores[0] ?? { name: BLANK_VALUE, address: BLANK_VALUE, usingTerm: BLANK_VALUE, months: BLANK_VALUE }
+  const secondStore = stores[1] ?? { name: BLANK_VALUE, address: BLANK_VALUE, usingTerm: BLANK_VALUE, months: BLANK_VALUE }
   const feeCells = model.feeRows.flatMap((row) => [
     formatMoney(row.unitPrice),
     row.storeCount ? String(row.storeCount) : BLANK_VALUE,
@@ -75,14 +77,14 @@ export function buildClickReplacements(
     model.contractNo,
     model.partyBName,
     model.signedDate,
-    stores[0].name || BLANK_VALUE,
-    stores[0].address || BLANK_VALUE,
-    stores[0].usingTerm || BLANK_VALUE,
-    String(stores[0].months || BLANK_VALUE),
-    stores[1].name || BLANK_VALUE,
-    stores[1].address || BLANK_VALUE,
-    stores[1].usingTerm || BLANK_VALUE,
-    String(stores[1].months || BLANK_VALUE),
+    firstStore.name || BLANK_VALUE,
+    firstStore.address || BLANK_VALUE,
+    firstStore.usingTerm || BLANK_VALUE,
+    String(firstStore.months || BLANK_VALUE),
+    secondStore.name || BLANK_VALUE,
+    secondStore.address || BLANK_VALUE,
+    secondStore.usingTerm || BLANK_VALUE,
+    String(secondStore.months || BLANK_VALUE),
     model.totalMonths ? String(model.totalMonths) : BLANK_VALUE,
     model.contractNo,
     model.partyBName,
