@@ -68,20 +68,6 @@ export interface XmsApi {
   }
 }
 
-export interface LegacyApi {
-  listTemplates(): Promise<TemplateManifestEntry[]>
-  listDrafts(): Promise<DraftSummary[]>
-  loadDraft(id: string): Promise<Draft | null>
-  saveDraft(draft: DraftSaveRequestInput): Promise<DraftSaveResponseT>
-  deleteDraft(id: string): Promise<void>
-  getSettings(): Promise<AppSettings>
-  saveSettings(settings: AppSettings): Promise<void>
-  renderDocx(payload: RenderDocxRequestInput): Promise<RenderDocxResponseT>
-  saveAs(tempPath: string, suggestedName: string): Promise<RenderSaveAsResponseT>
-  openFile(path: string): Promise<void>
-  showInFinder(path: string): Promise<void>
-}
-
 export const xmsApi: XmsApi = {
   settings: {
     get: () => invoke(IPC.settings.get, SettingsGetRequest, SettingsGetResponse, undefined),
@@ -105,18 +91,4 @@ export const xmsApi: XmsApi = {
     openFile: (path) => invoke(IPC.os.openFile, OsOpenFileRequest, OsOpenFileResponse, path),
     showInFinder: (path) => invoke(IPC.os.showInFinder, OsShowInFinderRequest, OsShowInFinderResponse, path)
   }
-}
-
-export const legacyApi: LegacyApi = {
-  listTemplates: () => xmsApi.template.list(),
-  listDrafts: () => xmsApi.draft.list(),
-  loadDraft: (id) => xmsApi.draft.load(id),
-  saveDraft: (draft) => xmsApi.draft.save(draft),
-  deleteDraft: (id) => xmsApi.draft.delete(id),
-  getSettings: () => xmsApi.settings.get(),
-  saveSettings: (settings) => xmsApi.settings.save(settings),
-  renderDocx: (payload) => xmsApi.render.docx(payload),
-  saveAs: (tempPath, suggestedName) => xmsApi.render.saveAs(tempPath, suggestedName),
-  openFile: (path) => xmsApi.os.openFile(path),
-  showInFinder: (path) => xmsApi.os.showInFinder(path)
 }

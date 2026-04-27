@@ -3,7 +3,7 @@ import { join } from 'path'
 import type { IpcMain } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
 import type { z } from 'zod'
-import { buildClickReplacements, buildSpecialTextReplacements } from '@shared/contract-render'
+import { buildClickReplacements, buildSpecialTextReplacements } from '@core/documents/contract-fullright'
 import { IPC } from '@shared/ipc/channels'
 import {
   RenderDocxRequest,

@@ -17,9 +17,7 @@ beforeEach(async () => {
     name: 'Contract Fullright',
     subtitle: 'Background Music Service Agreement',
     version: '1.0.0',
-    templateFile: 'contract-fullright.template.docx',
-    skeletonFile: 'skeleton.html',
-    schemaId: 'contractFullright'
+    templateFile: 'contract-fullright.template.docx'
   }), 'utf-8')
   await writeFile(join(templateDir, 'contract-fullright.template.docx'), 'first', 'utf-8')
 })

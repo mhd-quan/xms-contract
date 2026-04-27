@@ -11,9 +11,7 @@ const FALLBACK_TEMPLATES: TemplateManifestEntry[] = [
     name: 'Contract Fullright',
     subtitle: 'Background Music Service Agreement',
     version: '1.0.0',
-    templateFile: 'contract-fullright.dotx',
-    skeletonFile: 'skeleton.xml',
-    schemaId: DocumentKind.ContractFullright
+    templateFile: 'contract-fullright.dotx'
   }
 ]
 

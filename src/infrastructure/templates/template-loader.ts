@@ -12,9 +12,7 @@ const TemplateManifestSchema = z.object({
   name: z.string(),
   subtitle: z.string(),
   version: z.string(),
-  templateFile: z.string(),
-  skeletonFile: z.string(),
-  schemaId: z.string()
+  templateFile: z.string()
 })
 
 export interface TemplateLoader {

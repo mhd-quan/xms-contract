@@ -11,8 +11,6 @@ export interface TemplateManifestEntry {
   subtitle: string
   version: string
   templateFile: string
-  skeletonFile: string
-  schemaId: string
 }
 
 export type DraftSummary = SchemaDraftSummary
