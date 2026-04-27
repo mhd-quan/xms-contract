@@ -1,68 +1,35 @@
-import { useState, useEffect } from 'react'
-import { v4 as uuidv4 } from 'uuid'
-import { coerceDocumentKind, DocumentKind, type DocumentKind as DocumentKindType } from '@shared/schema/document-kind'
+import { useEffect } from 'react'
+import { useLibraryStore } from '../stores/library-store'
 
 interface Props {
   onOpenTemplate: (draftId: string, templateId: string) => void
   onOpenSettings: () => void
 }
 
-interface DraftSummary {
-  id: string
-  kind?: DocumentKindType
-  templateId: string
-  title: string
-  createdAt: string
-  updatedAt: string
-}
-
-interface TemplateEntry {
-  id: string
-  kind?: DocumentKindType
-  name: string
-  subtitle: string
-  version: string
-}
-
 export default function LibraryView({ onOpenTemplate, onOpenSettings }: Props) {
-  const [templates, setTemplates] = useState<TemplateEntry[]>([])
-  const [drafts, setDrafts] = useState<DraftSummary[]>([])
-  const [hoveredCard, setHoveredCard] = useState<string | null>(null)
+  const templates = useLibraryStore((state) => state.templates)
+  const drafts = useLibraryStore((state) => state.drafts)
+  const hoveredCard = useLibraryStore((state) => state.hoveredCard)
+  const setHoveredCard = useLibraryStore((state) => state.setHoveredCard)
+  const loadData = useLibraryStore((state) => state.loadData)
+  const createDraft = useLibraryStore((state) => state.createDraft)
+  const deleteDraft = useLibraryStore((state) => state.deleteDraft)
 
   useEffect(() => { loadData() }, [])
 
-  async function loadData() {
-    try {
-      const tpls = await window.api.listTemplates()
-      setTemplates(tpls?.length ? tpls : [
-        { id: 'contract-fullright', kind: 'contract-fullright', name: 'Contract Fullright', subtitle: 'Background Music Service Agreement', version: '1.0.0' }
-      ])
-      const draftList = await window.api.listDrafts()
-      setDrafts(draftList || [])
-    } catch {
-      setTemplates([
-        { id: 'contract-fullright', kind: 'contract-fullright', name: 'Contract Fullright', subtitle: 'Background Music Service Agreement', version: '1.0.0' }
-      ])
-    }
-  }
-
   async function handleNewDraft(templateId: string) {
-    const draftId = uuidv4()
-    const now = new Date().toISOString()
-    const kind = coerceDocumentKind(templateId)
     try {
-      if (kind === DocumentKind.AnnexNewstore) {
-        await window.api.saveDraft({ id: draftId, kind, templateId: kind, title: 'Untitled', createdAt: now, updatedAt: now, exportedPath: null, data: {} })
-      } else {
-        await window.api.saveDraft({ id: draftId, kind: DocumentKind.ContractFullright, templateId: DocumentKind.ContractFullright, title: 'Untitled', createdAt: now, updatedAt: now, exportedPath: null, data: {} })
-      }
-    } catch { /* proceed */ }
-    onOpenTemplate(draftId, kind)
+      const draft = await createDraft(templateId)
+      onOpenTemplate(draft.draftId, draft.templateId)
+    } catch {
+      const draft = await createDraft('contract-fullright')
+      onOpenTemplate(draft.draftId, draft.templateId)
+    }
   }
 
   async function handleDeleteDraft(e: React.MouseEvent, id: string) {
     e.stopPropagation()
-    try { await window.api.deleteDraft(id); setDrafts((d) => d.filter((x) => x.id !== id)) } catch {}
+    try { await deleteDraft(id) } catch {}
   }
 
   function timeAgo(iso: string): string {

@@ -1,0 +1,1 @@
+export const ANNEX_NEWSTORE_INITIAL_DATA = {}

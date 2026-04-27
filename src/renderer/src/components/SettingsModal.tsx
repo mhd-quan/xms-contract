@@ -1,67 +1,26 @@
-import { useState, useEffect } from 'react'
-import type { AppSettings } from '@shared/types'
+import { useEffect } from 'react'
+import { useSettingsStore } from '../stores/settings-store'
 
 interface Props {
   onClose: () => void
 }
 
 export default function SettingsModal({ onClose }: Props) {
-  const [persistedSettings, setPersistedSettings] = useState<AppSettings | null>(null)
-  const [settings, setSettings] = useState({
-    bankAccount: '', bankName: '', bankBranch: '',
-    poaNo: '', poaDate: '',
-    paymentBankAccount: '', paymentBankName: '',
-    contactName: '', contactEmail: '', contactPhone: ''
-  })
+  const settings = useSettingsStore((state) => state.form)
+  const loadSettings = useSettingsStore((state) => state.loadSettings)
+  const updateField = useSettingsStore((state) => state.updateField)
+  const saveSettings = useSettingsStore((state) => state.saveSettings)
 
   useEffect(() => {
     loadSettings()
   }, [])
 
-  async function loadSettings() {
-    try {
-      const s = await window.api.getSettings()
-      if (s?.partyA) {
-        setPersistedSettings(s)
-        setSettings({
-          bankAccount: s.partyA.bankAccount || '',
-          bankName: s.partyA.bankName || '',
-          bankBranch: s.partyA.bankBranch || '',
-          poaNo: s.partyA.poaNo || '',
-          poaDate: s.partyA.poaDate || '',
-          paymentBankAccount: s.partyA.paymentBankAccount || '',
-          paymentBankName: s.partyA.paymentBankName || '',
-          contactName: s.defaults?.defaultContactA?.name || '',
-          contactEmail: s.defaults?.defaultContactA?.email || '',
-          contactPhone: s.defaults?.defaultContactA?.phone || ''
-        })
-      }
-    } catch {}
-  }
-
   async function handleSave() {
     try {
-      const defaults = persistedSettings?.defaults ?? {
-        vatPct: 10,
-        defaultContactA: { name: '', email: '', phone: '' }
-      }
-      await window.api.saveSettings({
-        partyA: {
-          bankAccount: settings.bankAccount, bankName: settings.bankName, bankBranch: settings.bankBranch,
-          poaNo: settings.poaNo, poaDate: settings.poaDate,
-          paymentBankAccount: settings.paymentBankAccount, paymentBankName: settings.paymentBankName
-        },
-        defaults: {
-          ...defaults,
-          defaultContactA: { name: settings.contactName, email: settings.contactEmail, phone: settings.contactPhone }
-        },
-        ui: persistedSettings?.ui ?? { lastFormPaneWidthPct: 42, previewSyncScroll: false }
-      })
+      await saveSettings()
       onClose()
     } catch {}
   }
-
-  function update(key: string, val: string) { setSettings((p) => ({ ...p, [key]: val })) }
 
   return (
     <div className="modal" onClick={onClose}>
@@ -81,7 +40,7 @@ export default function SettingsModal({ onClose }: Props) {
             ].map(f => (
               <label key={f.k} className="settings-field">
                 <span className="field-label">{f.l}</span>
-                <input className="field-input" value={settings[f.k as keyof typeof settings]} onChange={(e) => update(f.k, e.target.value)} />
+                <input className="field-input" value={settings[f.k as keyof typeof settings]} onChange={(e) => updateField(f.k as keyof typeof settings, e.target.value)} />
               </label>
             ))}
           </div>
