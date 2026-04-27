@@ -1,6 +1,5 @@
 import { memo, useMemo } from 'react'
-import { buildPreviewModel, formatMoney } from '@core/documents/contract-fullright'
-import { ContractFullrightSchema } from '@shared/schema/contract-fullright'
+import { buildPreviewModel, formatMoney, normalizeContractFullrightForm } from '@core/documents/contract-fullright'
 import { useDraftStore } from '../stores/draft-store'
 
 interface Props {
@@ -12,7 +11,7 @@ function PreviewPane({ activeTab, onTabChange }: Props) {
   const formData = useDraftStore((state) => state.formData)
   const stores = useDraftStore((state) => state.stores)
   const model = useMemo(() => {
-    const parsed = ContractFullrightSchema.parse({ ...formData, stores })
+    const parsed = normalizeContractFullrightForm({ ...formData, stores })
     return buildPreviewModel(parsed)
   }, [formData, stores])
 

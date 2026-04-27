@@ -4,7 +4,7 @@ import StatusBar from '../../../components/StatusBar'
 import PreviewPane from '../../../components/PreviewPane'
 import { useDraftStore } from '../../../stores/draft-store'
 import { osService, renderService } from '../../../services/xms-services'
-import { deriveDraftTitle } from '@core/documents/contract-fullright'
+import { deriveDraftTitle, normalizeContractFullrightForm } from '@core/documents/contract-fullright'
 import type { RenderDocxRequestInput } from '@shared/ipc/contracts'
 import { DocumentKind, type DocumentKind as DocumentKindType } from '@shared/schema/document-kind'
 
@@ -66,7 +66,7 @@ export default function ContractFullrightFormView({ draftId, templateId, documen
   const updateStoreRow = useDraftStore((state) => state.updateStoreRow)
   const deleteStoreRow = useDraftStore((state) => state.deleteStoreRow)
 
-  const totalFields = 45
+  const totalFields = EDITABLE_FIELD_KEYS.length
   const filledCount = useMemo(
     () => EDITABLE_FIELD_KEYS.filter((key) => formData[key]?.trim()).length,
     [formData]
@@ -103,7 +103,7 @@ export default function ContractFullrightFormView({ draftId, templateId, documen
         draftId,
         kind: DocumentKind.ContractFullright,
         templateId: DocumentKind.ContractFullright,
-        data: { ...formData, stores }
+        data: normalizeContractFullrightForm({ ...formData, stores })
       }
       const rendered = await renderService.docx(renderPayload)
       const saved = await renderService.saveAs(rendered.tempPath, suggestedExportName())

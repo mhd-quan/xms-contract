@@ -143,6 +143,8 @@ input[type=number] { -moz-appearance: textfield; }
 
 .tpl-body { padding: 14px 16px; display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
 .tpl-meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tpl-kind-badge { width: fit-content; max-width: 100%; padding: 2px 5px; border: 1px solid var(--border-dim);
+  color: var(--pear); font-size: 8px; font-weight: 700; letter-spacing: 0.08em; line-height: 1; }
 .tpl-title { font-size: 14px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tpl-subtitle { font-size: 10px; font-weight: 500; letter-spacing: 0.06em; color: var(--text-dim); text-transform: uppercase; }
 .tpl-action { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
