@@ -11,6 +11,7 @@
   ],
   "compilerOptions": {
     "composite": true,
+    "noUncheckedIndexedAccess": true,
     "types": ["electron-vite/node"],
     "paths": {
       "@core/*": ["./src/core/*"],
