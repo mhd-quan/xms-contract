@@ -21,9 +21,7 @@ export const TemplateListResponse = z.array(z.object({
   name: z.string(),
   subtitle: z.string(),
   version: z.string(),
-  templateFile: z.string(),
-  skeletonFile: z.string(),
-  schemaId: z.string()
+  templateFile: z.string()
 }))
 
 export const DraftListRequest = EmptyRequestSchema

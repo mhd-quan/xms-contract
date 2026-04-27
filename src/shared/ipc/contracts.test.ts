@@ -49,9 +49,7 @@ describe('IPC contracts', () => {
       name: 'Contract Fullright',
       subtitle: 'Background Music Service Agreement',
       version: '1.0.0',
-      templateFile: 'contract-fullright.template.docx',
-      skeletonFile: 'skeleton.html',
-      schemaId: 'contractFullright'
+      templateFile: 'contract-fullright.template.docx'
     }])).toHaveLength(1)
   })
 })
