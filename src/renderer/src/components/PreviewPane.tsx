@@ -1,14 +1,15 @@
 import { memo, useMemo } from 'react'
-import { buildPreviewModel, formatMoney, type StoreRowData } from '@shared/contract-render'
+import { buildPreviewModel, formatMoney } from '@shared/contract-render'
+import { useDraftStore } from '../stores/draft-store'
 
 interface Props {
   activeTab: 'main' | 'app1' | 'app2'
   onTabChange: (tab: 'main' | 'app1' | 'app2') => void
-  formData: Record<string, string>
-  stores: StoreRowData[]
 }
 
-function PreviewPane({ activeTab, onTabChange, formData, stores }: Props) {
+function PreviewPane({ activeTab, onTabChange }: Props) {
+  const formData = useDraftStore((state) => state.formData)
+  const stores = useDraftStore((state) => state.stores)
   const model = useMemo(() => buildPreviewModel({ ...formData, stores }), [formData, stores])
 
   return (

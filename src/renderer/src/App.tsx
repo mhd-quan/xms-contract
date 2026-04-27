@@ -1,32 +1,28 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useEffect } from 'react'
 import LibraryView from './views/LibraryView'
 import FormView from './views/FormView'
 import SettingsModal from './components/SettingsModal'
-import type { AppView } from '@shared/types'
+import { useAppStore } from './stores/app-store'
 
 export default function App() {
-  const [view, setView] = useState<AppView>({ type: 'library' })
-  const [showSettings, setShowSettings] = useState(false)
+  const view = useAppStore((state) => state.view)
+  const showSettings = useAppStore((state) => state.showSettings)
+  const navigateToForm = useAppStore((state) => state.navigateToForm)
+  const navigateToLibrary = useAppStore((state) => state.navigateToLibrary)
+  const openSettings = useAppStore((state) => state.openSettings)
+  const closeSettings = useAppStore((state) => state.closeSettings)
+  const toggleSettings = useAppStore((state) => state.toggleSettings)
 
-  const navigateToForm = useCallback((draftId: string, templateId: string) => {
-    setView({ type: 'form', draftId, templateId })
-  }, [])
-
-  const navigateToLibrary = useCallback(() => {
-    setView({ type: 'library' })
-  }, [])
-
-  // Global keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.metaKey && e.key === ',') {
         e.preventDefault()
-        setShowSettings((s) => !s)
+        toggleSettings()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [toggleSettings])
 
   return (
     <div className="app-shell">
@@ -34,7 +30,7 @@ export default function App() {
         <div className="view-enter" key="library">
           <LibraryView
             onOpenTemplate={navigateToForm}
-            onOpenSettings={() => setShowSettings(true)}
+            onOpenSettings={openSettings}
           />
         </div>
       )}
@@ -44,11 +40,11 @@ export default function App() {
             draftId={view.draftId}
             templateId={view.templateId}
             onBack={navigateToLibrary}
-            onOpenSettings={() => setShowSettings(true)}
+            onOpenSettings={openSettings}
           />
         </div>
       )}
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showSettings && <SettingsModal onClose={closeSettings} />}
     </div>
   )
 }
