@@ -1,0 +1,7 @@
+{
+  "id": "annex-newstore",
+  "name": "Annex New Store",
+  "subtitle": "New Store Terms Appendix",
+  "version": "0.1.0",
+  "templateFile": "annex-newstore.stub.docx"
+}

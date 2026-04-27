@@ -43,9 +43,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function normalizeFormData(data: unknown): Record<string, string> {
   if (!isRecord(data)) return {}
-  return Object.entries(data).reduce<Record<string, string>>((acc, [key, value]) => {
+  const raw = Object.entries(data).reduce<Record<string, string>>((acc, [key, value]) => {
     if (typeof value === 'string') acc[key] = value
     if (typeof value === 'number' || typeof value === 'boolean') acc[key] = String(value)
+    return acc
+  }, {})
+  return TEXT_FIELD_KEYS.reduce<Record<string, string>>((acc, key) => {
+    acc[key] = raw[key] ?? ''
     return acc
   }, {})
 }
@@ -65,14 +69,10 @@ export function normalizeStores(data: unknown, createId: () => string): Normaliz
 
 export function normalizeContractFullrightForm(input: unknown): ContractFullrightForm {
   const flat = normalizeFormData(input)
-  const form = TEXT_FIELD_KEYS.reduce<Record<string, string>>((acc, key) => {
-    acc[key] = flat[key] ?? ''
-    return acc
-  }, {})
   const rawVat = isRecord(input) ? Number(input.vatPct) : Number.NaN
 
   return {
-    ...form,
+    ...flat,
     stores: normalizeStores(input, () => ''),
     vatPct: Number.isFinite(rawVat) ? rawVat : 10
   } as ContractFullrightForm

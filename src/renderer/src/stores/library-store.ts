@@ -12,6 +12,14 @@ const FALLBACK_TEMPLATES: TemplateManifestEntry[] = [
     subtitle: 'Background Music Service Agreement',
     version: '1.0.0',
     templateFile: 'contract-fullright.dotx'
+  },
+  {
+    id: DocumentKind.AnnexNewstore,
+    kind: DocumentKind.AnnexNewstore,
+    name: 'Annex New Store',
+    subtitle: 'New Store Terms Appendix',
+    version: '0.1.0',
+    templateFile: 'annex-newstore.stub.docx'
   }
 ]
 
@@ -59,7 +67,7 @@ export const useLibraryStore = create<LibraryStoreState>((set) => ({
           id: draftId,
           kind: DocumentKind.AnnexNewstore,
           templateId: DocumentKind.AnnexNewstore,
-          title: 'Untitled',
+          title: 'Annex New Store',
           createdAt: now,
           updatedAt: now,
           exportedPath: null,

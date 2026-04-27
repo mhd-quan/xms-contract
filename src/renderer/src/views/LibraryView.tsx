@@ -1,9 +1,16 @@
 import { useEffect } from 'react'
 import { useLibraryStore } from '../stores/library-store'
+import { coerceDocumentKind, DocumentKind, type DocumentKind as DocumentKindType } from '@shared/schema/document-kind'
 
 interface Props {
   onOpenTemplate: (draftId: string, templateId: string) => void
   onOpenSettings: () => void
+}
+
+function formatKindLabel(kind: DocumentKindType | string | undefined): string {
+  const documentKind = coerceDocumentKind(kind)
+  if (documentKind === DocumentKind.AnnexNewstore) return 'ANNEX'
+  return 'CONTRACT'
 }
 
 export default function LibraryView({ onOpenTemplate, onOpenSettings }: Props) {
@@ -30,6 +37,12 @@ export default function LibraryView({ onOpenTemplate, onOpenSettings }: Props) {
   async function handleDeleteDraft(e: React.MouseEvent, id: string) {
     e.stopPropagation()
     try { await deleteDraft(id) } catch {}
+  }
+
+  function handleDraftKeyDown(e: React.KeyboardEvent, draftId: string, templateId: string) {
+    if (e.key !== 'Enter' && e.key !== ' ') return
+    e.preventDefault()
+    onOpenTemplate(draftId, templateId)
   }
 
   function timeAgo(iso: string): string {
@@ -90,7 +103,11 @@ export default function LibraryView({ onOpenTemplate, onOpenSettings }: Props) {
                   <div className="tpl-thumb-overlay" />
                 </div>
                 <div className="tpl-body">
-                  <div className="tpl-meta"><span className="tpl-title">{tpl.name}</span><span className="tpl-subtitle">{tpl.subtitle}</span></div>
+                  <div className="tpl-meta">
+                    <span className="tpl-kind-badge">{formatKindLabel(tpl.kind ?? tpl.id)}</span>
+                    <span className="tpl-title">{tpl.name}</span>
+                    <span className="tpl-subtitle">{tpl.subtitle}</span>
+                  </div>
                   <div className="tpl-action">
                     <span className="tpl-version">v{tpl.version}</span>
                     <span className="tpl-new-btn"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14" /></svg>NEW</span>
@@ -113,10 +130,17 @@ export default function LibraryView({ onOpenTemplate, onOpenSettings }: Props) {
             <div className="lib-section-head"><span className="lib-section-label">Recent Drafts</span><span className="lib-section-count">{drafts.length}</span></div>
             <div className="drafts-strip">
               {drafts.sort((a,b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).map((d) => (
-                <button key={d.id} className="draft-chip" onClick={() => onOpenTemplate(d.id, d.templateId)}>
-                  <span className="draft-dot" /><div className="draft-chip-info"><span className="draft-chip-title">{d.title}</span><span className="draft-chip-time">{timeAgo(d.updatedAt)}</span></div>
+                <div
+                  key={d.id}
+                  className="draft-chip"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onOpenTemplate(d.id, d.templateId)}
+                  onKeyDown={(e) => handleDraftKeyDown(e, d.id, d.templateId)}
+                >
+                  <span className="draft-dot" /><div className="draft-chip-info"><span className="draft-chip-title">{d.title}</span><span className="draft-chip-time">{formatKindLabel(d.kind ?? d.templateId)} · {timeAgo(d.updatedAt)}</span></div>
                   <button className="draft-chip-delete" onClick={(e) => handleDeleteDraft(e, d.id)}><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18M6 6l12 12" /></svg></button>
-                </button>
+                </div>
               ))}
             </div>
           </section>
