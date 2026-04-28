@@ -1,6 +1,6 @@
 {
   "name": "xms-contract",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "XMS Contract — Background Music Service Agreement Generator",
   "main": "./out/main/index.js",
   "homepage": "https://github.com/xmusicstation/xms-contract",
